@@ -1,11 +1,21 @@
-#include "file_huffman.hpp"
+#include <string>
 
-int main(){
-//    file_huffman::compressFile("z24.png", "3.bin");
-//    file_huffman::decompressFile("3.bin", "4.png");
-//    file_huffman::compressFile("2.txt", "2.bin");
-//    file_huffman::decompressFile("2.bin", "3.txt");
-//    file_huffman::compressFile("huff.exe", "huff.bin");
-//    file_huffman::decompressFile("huff.bin", "huff2.exe");
+#include "args.hpp"
+#include "huff.hpp"
+
+int main(int argc, char *argv[]) {
+    args::settings parser(
+        args::option("-c", "--compress"  , "Compress a file")
+            .as(args::type::string)
+            .required(),
+        args::option("-d", "--decompress", "Decompress a file")
+            .as(args::type::string)
+            .required(),
+        args::option("-o", "--output"    , "Output file")   
+            .as(args::type::string)
+            .default_val("output.hff")
+    )
+
+    args::arg result = parser.parse(argc, argv);
 }
 
