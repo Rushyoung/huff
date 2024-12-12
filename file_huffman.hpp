@@ -17,7 +17,6 @@ struct HuffmanNode {
     HuffmanNode(char ch, int freq, shared_ptr<HuffmanNode> l, shared_ptr<HuffmanNode> r) : ch(ch), freq(freq), left(l), right(r) {}
 };
 
-// 比较器，用于优先队列
 struct Compare {
     bool operator()(shared_ptr<HuffmanNode> l, shared_ptr<HuffmanNode> r) {
         return l->freq > r->freq;
@@ -144,6 +143,10 @@ public:
         }
 
         auto root = loadTree(in);
+        if (!root) {
+            cerr << "Error: Failed to load Huffman tree" << endl;
+            return;
+        }
         in.get(); // Skip the tree and data separator
 
         string encodedStr;
@@ -161,6 +164,11 @@ public:
                 current = current->left;
             } else {
                 current = current->right;
+            }
+
+            if (!current) {
+                cerr << "Error: Decoding path leads to a NULL node" << endl;
+                return;
             }
 
             if (!current->left && !current->right) {
