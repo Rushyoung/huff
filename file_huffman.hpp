@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <memory>
 #include <bitset>
-
+#define STEP 8
 using namespace std;
 
 struct HuffmanNode {
@@ -111,11 +111,11 @@ public:
         saveTree(root, out);
         out.put('#'); // Tree and data separator
 
-        bitset<8> bits;
+        bitset<STEP> bits;
         int bitIndex = 0;
         for (char bit : encodedStr) {
             bits[bitIndex++] = bit - '0';
-            if (bitIndex == 8) {
+            if (bitIndex == STEP) {
                 out.put(static_cast<char>(bits.to_ulong()));
                 bits.reset();
                 bitIndex = 0;
@@ -152,8 +152,8 @@ public:
         string encodedStr;
         char byte;
         while (in.get(byte)) {
-            bitset<8> bits(byte);
-            for (int i = 0; i < 8; ++i) {
+            bitset<STEP> bits(byte);
+            for (int i = 0; i < STEP; ++i) {
                 encodedStr += bits[i] ? '1' : '0';
             }
         }
