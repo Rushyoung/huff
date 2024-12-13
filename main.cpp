@@ -1,21 +1,47 @@
 #include <string>
 
+#include <iostream>
+
 #include "args.hpp"
 #include "huff.hpp"
 
-int main(int argc, char *argv[]) {
+args::arg parser_args(int argc, char *argv[]) {
     args::settings parser(
         args::option("-c", "--compress"  , "Compress a file")
-            .as(args::type::string)
-            .required(),
+            .as(args::type::string),
         args::option("-d", "--decompress", "Decompress a file")
-            .as(args::type::string)
-            .required(),
+            .as(args::type::string),
         args::option("-o", "--output"    , "Output file")   
             .as(args::type::string)
-            .default_val("output.hff")
-    )
+            .default_val("output.hff"),
+        args::option("--debug", "enable debug mode for more information")
+            .as(args::type::boolean)
+            .default_val("false")
+    );
 
-    args::arg result = parser.parse(argc, argv);
+    return parser.parse(argc, argv);
+}
+
+int main(int argc, char *argv[]) {
+    args::arg result;
+    try{
+        result = parser_args(argc, argv);
+    } catch(...) {
+        std::cerr << "Error parsing arguments" << std::endl;
+        return 1;
+    }
+
+    if(result.has("compress")) {
+        std::string file   = result["compress"].as<std::string>();
+        std::string output = result["output"].as<std::string>();
+        bool debug = result["debug"].as<bool>();
+        return huff::compress(file, output, debug);
+    }
+    
+    if(result.has("decompress")) {
+        std::string file   = result["decompress"].as<std::string>();
+        bool debug = result["debug"].as<bool>();
+        return huff::decompress(file, debug);
+    }
 }
 
