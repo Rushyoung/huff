@@ -32,15 +32,15 @@ int main(int argc, char *argv[]) {
     }
 
     if(result.has("compress")) {
-        std::string file   = result["compress"].as<std::string>();
-        std::string output = result["output"].as<std::string>();
-        bool debug = result["debug"].as<bool>();
+        std::string file   = result["compress"].as<args::string>();
+        std::string output = result["output"].as<args::string>();
+        bool debug = result["debug"].as<args::boolean>();
         return huff::compress(file, output, debug);
     }
     
     if(result.has("decompress")) {
-        std::string file   = result["decompress"].as<std::string>();
-        bool debug = result["debug"].as<bool>();
+        std::string file   = result["decompress"].as<args::string>();
+        bool debug = result["debug"].as<args::boolean>();
         return huff::decompress(file, debug);
     }
 }

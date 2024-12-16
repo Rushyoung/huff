@@ -28,34 +28,24 @@ option option::required() {
  * __data class
  */
 template <>
-int __data::as<int>() {
-    return std::stoi(value);
-}
-
-template <>
-double __data::as<double>() {
+number __data::as<number>() {
     return std::stod(value);
 }
 
 template <>
-bool __data::as<bool>() {
+boolean __data::as<boolean>() {
     if(value == "true") {
         return true;
-    }
-    if(value == "false") {
+    } else if(value == "false") {
         return false;
+    } else {
+        throw std::invalid_argument("Invalid boolean value: " + value);
     }
-    throw std::invalid_argument("Invalid boolean value: " + value);
 }
 
 template <>
-char* __data::as<char*>() {
-    return const_cast<char*>(value.c_str());
-}
-
-template <>
-std::string __data::as<std::string>() {
-    return value;
+string __data::as<string>() {
+    return value.c_str();
 }
 
 
@@ -151,7 +141,7 @@ bool settings::legal_long(std::string long_name) {
 arg settings::parse(int argc, char *args[]) {
     std::map<std::string, arg::arg_data> data;
     std::map<std::string, std::string> short_to_long;
-
+    program_name = args[0];
     std::vector<std::string> argv;
     for(int i = 0; i < argc; i++) {
         argv.push_back(std::string(args[i]));
@@ -177,8 +167,6 @@ arg settings::parse(int argc, char *args[]) {
     std::vector<option> parsed_options;
     std::string last_option = "";
     for(auto tk = flow.next(); tk.tk_type != arg_flow::token::type::end; tk = flow.next()) {
-        std::cerr << ">>last_option: " << last_option << std::endl;
-        std::cerr << "!!value: " << tk.value << "|" << tk.value.size() << std::endl;
         if(tk.tk_type == arg_flow::token::type::option) {
             std::string opt_name = tk.value;
             if(opt_name.size() == 1){
@@ -187,7 +175,6 @@ arg settings::parse(int argc, char *args[]) {
                     throw std::invalid_argument("Invalid short option name: " + opt_name);
                 }
                 opt_name = it->second;
-                std::cerr << ">>>> to long: " << opt_name << std::endl;
             }
             // check if option is help
             if(opt_name == "help") {
@@ -210,8 +197,20 @@ arg settings::parse(int argc, char *args[]) {
     return arg(data);
 }
 
+std::string settings::get_name() {
+    auto flash = program_name.rfind("/");
+    if(flash != std::string::npos) {
+        return program_name.substr(flash + 1);
+    }
+    auto reflash = program_name.rfind("\\");
+    if(reflash != std::string::npos) {
+        return program_name.substr(reflash + 1);
+    }
+    return program_name;
+}
+
 void settings::print_help() {
-    std::cout << "Help message" << std::endl;
+    std::cout << "Usage:   " << get_name() << " [options]" << std::endl;
     std::cout << "Options:" << std::endl;
     for(auto &opt: options) {
         if(opt.short_name == "") {

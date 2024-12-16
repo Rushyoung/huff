@@ -24,4 +24,16 @@ int compress(std::string file, std::string output, bool debug=false) {
 }
 
 
+int decompress(std::string file, bool debug=false) {
+    std::ifstream in(file, std::ios::binary);
+    if(not in.is_open()) {
+        std::cerr << "Error opening file: " << file << std::endl;
+        return 1;
+    }
+
+    // decompress file
+    return 0;
+}
+
+
 }

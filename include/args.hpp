@@ -6,6 +6,10 @@
 
 namespace args {
 
+using string = const char*;
+using number = const double;
+using boolean = const bool;
+
 enum class type {
     string,
     number,
@@ -50,12 +54,9 @@ struct __data {
     template <typename T>
     T as();
 };
-template <> int         __data::as<int>         ();
-template <> double      __data::as<double>      ();
-template <> bool        __data::as<bool>        ();
-template <> char*       __data::as<char*>       ();
-template <> std::string __data::as<std::string> ();
-
+template <> string     __data::as<string>  ();
+template <> number     __data::as<number>  ();
+template <> boolean    __data::as<boolean> ();
 
 
 class arg {
@@ -120,6 +121,8 @@ public:
 class settings {
 private:
     std::vector<option> options;
+    std::string program_name;
+    std::string get_name();
 
     bool legal_option(std::string name);
     bool legal_short(std::string short_name);
