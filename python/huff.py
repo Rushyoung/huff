@@ -32,10 +32,11 @@ class BPE:
         self.vocab = dict()
         self.pairs = dict()
         self.token = dict()
+        self.blacklist = set()
 
     def train(self, size = None) -> None:
         if size == None:
-            size = len(self.bin) // 4
+            size = len(self.bin) // 6
         assert 0 < size,             "size must be greater than 0"
         assert size < len(self.bin), "size must be less than the length of the input binary string"
         self._deal_vocab()
@@ -62,7 +63,12 @@ class BPE:
             self.pair_pos[pair].append(idx-1)
 
     def _merge_vocab(self) -> None:
+        ori_list = self.bin_list.copy()
+        # 最多，且不在黑名单中的pair
         best_pair = max(self.pairs, key=self.pairs.get)
+        while best_pair in self.blacklist:
+            self.pairs.pop(best_pair)
+            best_pair = max(self.pairs, key=self.pairs.get)
         if self.pairs[best_pair] == 1:
             return
         best_bin  = best_pair[0] + best_pair[1]
@@ -81,6 +87,14 @@ class BPE:
         self.token[best_bin] = freq
         self.token[best_pair[0]] -= freq
         self.token[best_pair[1]] -= freq
+        if self.token[best_pair[0]] == 1 or self.token[best_pair[1]] == 1:
+            # warning: the token is only used once, it is a low-frequency token
+            # should reset to the original state
+            self.bin_list = ori_list
+            self.token[best_bin] = 0
+            self.token[best_pair[0]] += freq
+            self.token[best_pair[1]] += freq
+            self.blacklist.add(best_pair)
 
     def build(self) -> node:
         self.vocab = dict()
@@ -98,10 +112,24 @@ class BPE:
         return nodes[0]
 
 
-example = '这是一个测试句子，用于测试哈夫曼编码'
+example = '''Licensing
+openpilot is released under the MIT license. Some parts of the software are released under other licenses as specified.
+
+Any user of this software shall indemnify and hold harmless Comma.ai, Inc. and its directors, officers, employees, agents, stockholders, affiliates, subcontractors and customers from and against all allegations, claims, actions, suits, demands, damages, liabilities, obligations, losses, settlements, judgments, costs and expenses (including without limitation attorneys’ fees and costs) which arise out of, relate to or result from any use of this software by user.
+
+THIS IS ALPHA QUALITY SOFTWARE FOR RESEARCH PURPOSES ONLY. THIS IS NOT A PRODUCT. YOU ARE RESPONSIBLE FOR COMPLYING WITH LOCAL LAWS AND REGULATIONS. NO WARRANTY EXPRESSED OR IMPLIED.
+
+User Data and comma Account
+By default, openpilot uploads the driving data to our servers. You can also access your data through comma connect. We use your data to train better models and improve openpilot for everyone.
+
+openpilot is open source software: the user is free to disable data collection if they wish to do so.
+
+openpilot logs the road-facing cameras, CAN, GPS, IMU, magnetometer, thermal sensors, crashes, and operating system logs. The driver-facing camera is only logged if you explicitly opt-in in settings. The microphone is not recorded.
+
+By using openpilot, you agree to our Privacy Policy. You understand that use of this software or its related services will generate certain types of user data, which may be logged and stored at the sole discretion of comma. By accepting this agreement, you grant an irrevocable, perpetual, worldwide right to comma for the use of this data.'''
 
 bin_str = encoding(example)
-print(bin_str)
+#print(bin_str)
 
 
 bpe = BPE(bin_str)
@@ -110,5 +138,5 @@ bpe.build()
 
 
 
-print(bpe.bin_list)
+#print(bpe.bin_list)
 print(bpe.vocab)
