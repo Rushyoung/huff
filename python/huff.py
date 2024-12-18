@@ -2,11 +2,15 @@ import collections
 
 dict = lambda: collections.defaultdict(int)
 
+batch = 8
+
 
 def encoding(string: str) -> str:
     result = []
     for b in bytearray(string, 'utf-8'):
-        result.append(bin(b)[2:])
+        s = bin(b)[2:]
+        s = '0' * (8 - len(s)) + s
+        result.append(s)
     return ''.join(result)
 
 def decoding(string: str) -> str:
@@ -22,13 +26,16 @@ class node:
         self.seq = seq
         self.left = None
         self.right = None
+        self.code = ''
 
 
 # 用于生成适当长度的二进制片段
 class BPE:
     def __init__(self, input_bin):
         self.bin: str = input_bin
-        self.bin_list = list(self.bin)
+        # 每4个字符为一组，用于统计频率
+        self.bin_list = [self.bin[i:i+batch] for i in range(0, len(self.bin), batch)]
+        assert len(self.bin_list) * batch == len(self.bin), 'must be whole number of batch'
         self.vocab = dict()
         self.pairs = dict()
         self.token = dict()
@@ -105,12 +112,29 @@ class BPE:
             nodes.sort(key=lambda x: x.freq)
             left = nodes.pop(0)
             right = nodes.pop(0)
-            parent = node(left.freq + right.freq, left.seq + right.seq)
+            parent = node(left.freq + right.freq, 'no the leaf')
             parent.left = left
             parent.right = right
             nodes.append(parent)
         return nodes[0]
+    
 
+def huffman_generate(n: node, code = '') -> None:
+    if n.left == None and n.right == None:
+        n.code = code
+        return
+    huffman_generate(n.left, code + '0')
+    huffman_generate(n.right, code + '1')
+
+
+def huffman_mapping(n: node):
+    mapping = {}
+    if n.left == None and n.right == None:
+        mapping[n.seq] = n.code
+    else:
+        mapping.update(huffman_mapping(n.left))
+        mapping.update(huffman_mapping(n.right))
+    return mapping
 
 example = '''Licensing
 openpilot is released under the MIT license. Some parts of the software are released under other licenses as specified.
@@ -134,9 +158,21 @@ bin_str = encoding(example)
 
 bpe = BPE(bin_str)
 bpe.train()
-bpe.build()
+root = bpe.build()
 
 
 
 #print(bpe.bin_list)
-print(bpe.vocab)
+#print(bpe.vocab)
+
+huffman_generate(root)
+mapping = huffman_mapping(root)
+#print(mapping)
+
+result = ''
+for b in bpe.bin_list:
+    result += mapping[b]
+
+#print(result)
+#print(len(result))
+print(f'batch {batch} : compression ratio: {len(result) / len(bin_str)}')
