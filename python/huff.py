@@ -4,8 +4,9 @@ import hffl
 
 dict = lambda: collections.defaultdict(int)
 
-batch = 8
+batch = 4
 min_freq = 2
+max_vocab = 128
 
 def encoding(string: str) -> str:
     result = []
@@ -44,8 +45,11 @@ class BPE:
         self.blacklist = set()
 
     def train(self, size = None) -> None:
-        if size == None:
-            size = len(self.bin) // 6
+        if size is None:
+            if max_vocab is not None:
+                size = max_vocab
+            else:
+                size = len(self.bin) // 6
         assert 0 < size,             "size must be greater than 0"
         assert size < len(self.bin), "size must be less than the length of the input binary string"
         self._deal_vocab()
@@ -123,7 +127,7 @@ class BPE:
     
 
 def huffman_generate(n: node, code = '') -> None:
-    if n.left == None and n.right == None:
+    if n.left is None and n.right is None:
         n.code = code
         return
     huffman_generate(n.left, code + '0')
@@ -132,7 +136,7 @@ def huffman_generate(n: node, code = '') -> None:
 
 def huffman_mapping(n: node):
     mapping = {}
-    if n.left == None and n.right == None:
+    if n.left is None and n.right is None:
         mapping[n.seq] = n.code
     else:
         mapping.update(huffman_mapping(n.left))
