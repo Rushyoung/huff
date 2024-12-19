@@ -1,9 +1,11 @@
 import collections
 
+import hffl
+
 dict = lambda: collections.defaultdict(int)
 
 batch = 8
-
+min_freq = 2
 
 def encoding(string: str) -> str:
     result = []
@@ -76,7 +78,7 @@ class BPE:
         while best_pair in self.blacklist:
             self.pairs.pop(best_pair)
             best_pair = max(self.pairs, key=self.pairs.get)
-        if self.pairs[best_pair] == 1:
+        if self.pairs[best_pair] <= min_freq:
             return
         best_bin  = best_pair[0] + best_pair[1]
         length = len(self.bin_list)
@@ -94,7 +96,7 @@ class BPE:
         self.token[best_bin] = freq
         self.token[best_pair[0]] -= freq
         self.token[best_pair[1]] -= freq
-        if self.token[best_pair[0]] == 1 or self.token[best_pair[1]] == 1:
+        if self.token[best_pair[0]] <= min_freq or self.token[best_pair[1]] <= min_freq:
             # warning: the token is only used once, it is a low-frequency token
             # should reset to the original state
             self.bin_list = ori_list
@@ -173,6 +175,10 @@ result = ''
 for b in bpe.bin_list:
     result += mapping[b]
 
+whole = hffl.header_generate(bpe.vocab, result)
+
 #print(result)
 #print(len(result))
-print(f'batch {batch} : compression ratio: {len(result) / len(bin_str)}')
+print(f'batch {batch}')
+print(f'net compression ratio: {len(result) / len(bin_str)}')
+print(f'whole compression ratio: {len(whole) / len(bin_str)}')
