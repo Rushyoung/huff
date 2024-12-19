@@ -55,8 +55,8 @@ class BPE:
             self._merge_vocab()
 
     def _deal_vocab(self) -> None:
-        self.vocab['0'] = self.bin.count('0')
-        self.vocab['1'] = len(self.bin) - self.vocab[0]
+        for seq in self.bin_list:
+            self.vocab[seq] += 1
 
     def _deal_token(self) -> None:
         self.token = self.vocab.copy()

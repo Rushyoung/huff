@@ -22,6 +22,8 @@ def header_generate(vocab, content):
     value_bit = int(math.ceil(math.log2(max_value)))
     # add vocab, int: str
     for k, v in vocab.items():
+        if v == 0:
+            continue
         header.append(bormat(v, value_bit))
         header.append(k)
     # add content length
