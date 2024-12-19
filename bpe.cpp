@@ -1,5 +1,25 @@
 #include "bpe.hpp"
 #include <iostream>
+
+std::string encoding(const std::string& str) {
+    std::string result;
+    for (unsigned char c : str) {
+        std::bitset<8> bits(c);
+        result += bits.to_string();
+    }
+    return result;
+}
+
+std::string decoding(const std::string& str) {
+    std::string result;
+    for (size_t i = 0; i < str.size(); i += 8) {
+        std::bitset<8> bits(str.substr(i, 8));
+        result += static_cast<char>(bits.to_ulong());
+    }
+    return result;
+}
+
+
 void BPE::deal_vocab(){
     for(const auto& seq : bin_list){
         vocab[seq]++;

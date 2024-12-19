@@ -10,23 +10,10 @@
 #include <exception>
 
 
-std::string encoding(const std::string& str) {
-    std::string result;
-    for (unsigned char c : str) {
-        std::bitset<8> bits(c);
-        result += bits.to_string();
-    }
-    return result;
-}
+std::string encoding(const std::string& str);
 
-std::string decoding(const std::string& str) {
-    std::string result;
-    for (size_t i = 0; i < str.size(); i += 8) {
-        std::bitset<8> bits(str.substr(i, 8));
-        result += static_cast<char>(bits.to_ulong());
-    }
-    return result;
-}
+std::string decoding(const std::string& str);
+
 
 struct pair_hash {
     template <class T1, class T2>
