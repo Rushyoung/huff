@@ -5,4 +5,5 @@ set(CMAKE_CXX_STANDARD 14)
 
 add_executable(huff main.cpp
         file_huffman.cpp
-        file_huffman.hpp)
+        file_huffman.hpp
+        bpe.cpp)
