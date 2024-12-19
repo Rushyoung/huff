@@ -96,7 +96,8 @@ class BPE:
         self.token[best_bin] = freq
         self.token[best_pair[0]] -= freq
         self.token[best_pair[1]] -= freq
-        if self.token[best_pair[0]] <= min_freq or self.token[best_pair[1]] <= min_freq:
+        common_freq = lambda x: x <= 0 or x > min_freq
+        if not common_freq(self.token[best_pair[0]]) or not common_freq(self.token[best_pair[1]]):
             # warning: the token is only used once, it is a low-frequency token
             # should reset to the original state
             self.bin_list = ori_list
@@ -138,21 +139,9 @@ def huffman_mapping(n: node):
         mapping.update(huffman_mapping(n.right))
     return mapping
 
-example = '''Licensing
-openpilot is released under the MIT license. Some parts of the software are released under other licenses as specified.
+example = '''红蓝对抗的概念最早来源于20世纪60年代的美国演习，演习是专指军队进行大规模的实兵演习，演习中通常分为红军、蓝军，其中蓝军通常是指在部队模拟对抗演习专门扮演假想敌的部队，与红军(代表我方正面部队)进行针对性的训练，这种方式也被称作Red Teaming。
 
-Any user of this software shall indemnify and hold harmless Comma.ai, Inc. and its directors, officers, employees, agents, stockholders, affiliates, subcontractors and customers from and against all allegations, claims, actions, suits, demands, damages, liabilities, obligations, losses, settlements, judgments, costs and expenses (including without limitation attorneys’ fees and costs) which arise out of, relate to or result from any use of this software by user.
-
-THIS IS ALPHA QUALITY SOFTWARE FOR RESEARCH PURPOSES ONLY. THIS IS NOT A PRODUCT. YOU ARE RESPONSIBLE FOR COMPLYING WITH LOCAL LAWS AND REGULATIONS. NO WARRANTY EXPRESSED OR IMPLIED.
-
-User Data and comma Account
-By default, openpilot uploads the driving data to our servers. You can also access your data through comma connect. We use your data to train better models and improve openpilot for everyone.
-
-openpilot is open source software: the user is free to disable data collection if they wish to do so.
-
-openpilot logs the road-facing cameras, CAN, GPS, IMU, magnetometer, thermal sensors, crashes, and operating system logs. The driver-facing camera is only logged if you explicitly opt-in in settings. The microphone is not recorded.
-
-By using openpilot, you agree to our Privacy Policy. You understand that use of this software or its related services will generate certain types of user data, which may be logged and stored at the sole discretion of comma. By accepting this agreement, you grant an irrevocable, perpetual, worldwide right to comma for the use of this data.'''
+网络安全红蓝对抗的概念就源自于此。红军作为企业防守方，通过安全加固、攻击监测、应急处置等手段来保障企业安全。而蓝军作为攻击方，以发现安全漏洞，获取业务权限或数据为目标，利用各种攻击手段，试图绕过红军层层防护，达成既定目标。可能会造成混淆的是，在欧美一般采用红队代表攻击方，蓝队代表防守方，颜色代表正好相反'''
 
 bin_str = encoding(example)
 #print(bin_str)
