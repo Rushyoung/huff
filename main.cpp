@@ -4,6 +4,7 @@
 
 #include "args.hpp"
 #include "huff.hpp"
+#include "jsrt.hpp"
 
 args::arg parser_args(int argc, char *argv[]) {
     args::settings parser(
@@ -23,6 +24,7 @@ args::arg parser_args(int argc, char *argv[]) {
 }
 
 int main(int argc, char *argv[]) {
+    JS_Run();
     args::arg result;
     try{
         result = parser_args(argc, argv);

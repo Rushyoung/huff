@@ -1,39 +1,26 @@
 #pragma once
 
 #include <string>
-#include <filesystem>
-#include <fstream>
+#include <map>
+#include <vector>
+
+using byte = unsigned char;
+using dict = std::map<std::string, int>;
 
 namespace huff{
 
-int compress(std::string file, std::string output, bool debug=false) {
-    std::ifstream in(file, std::ios::binary);
-    if(not in.is_open()) {
-        std::cerr << "Error opening file: " << file << std::endl;
-        return 1;
-    }
+struct bits{
+    std::vector<byte> data;
+    bits() = default;
+};
 
-    std::ofstream out(output, std::ios::binary);
-    if(not out.is_open()) {
-        std::cerr << "Error opening file: " << output << std::endl;
-        return 1;
-    }
+class file{
+    dict vocab;
+    bits content;
+};
 
-    // compress file
-    return 0;
-}
-
-
-int decompress(std::string file, bool debug=false) {
-    std::ifstream in(file, std::ios::binary);
-    if(not in.is_open()) {
-        std::cerr << "Error opening file: " << file << std::endl;
-        return 1;
-    }
-
-    // decompress file
-    return 0;
-}
+int compress  (std::string, std::string, bool=false);
+int decompress(std::string,              bool=false);
 
 
 }
