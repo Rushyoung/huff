@@ -6,22 +6,35 @@ project(hfc)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-#set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
-
 if(MSVC)
     add_compile_options(/MP)
 else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 endif()
 
-#set the goal to windows 10 and later
+# set the goal to windows 10 and later
 add_compile_options(-DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00)
 
-#set include directory
+# set include directory
 include_directories(include)
 
-#set source directory
+# compile src/vacob.js to src/vacob.c
+# use ./depend/bin/qjsc as quickjs compiler
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/src/vacob.c
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/depend/bin/qjsc -c -o ${CMAKE_CURRENT_SOURCE_DIR}/src/vacob.c ${CMAKE_CURRENT_SOURCE_DIR}/src/vacob.js
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/vacob.js
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# add a custom target to ensure the command is run
+add_custom_target(generate_vacob ALL DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/vacob.c)
+
+# set source directory
 file(GLOB SOURCES "src/*.cpp")
 
-#add executable with sources and main.c file
+# add executable with sources and main.cpp file
 add_executable(hfc ${SOURCES} main.cpp)
+
+# ensure the executable depends on the generated file
+add_dependencies(hfc generate_vacob)
