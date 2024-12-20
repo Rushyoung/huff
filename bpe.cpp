@@ -41,7 +41,7 @@ void BPE::deal_pairs(){
 }
 
 void BPE:: merge_vocab(int min_freq){
-    auto ori_list = bin_list;
+    auto ori_list = std::vector<std::string>(bin_list);
     auto best_pair = std::max_element(pairs.begin(), pairs.end(), [](const auto& a, const auto& b){
         return a.second < b.second;
     })->first;
@@ -97,10 +97,11 @@ void BPE::train(int min_freq, int size){
         // throw std::bad_exception();
         return;
     }
-    if(size < bin.length()){
-        //throw std::bad_exception();
-        return;
-    }
+    // if(size < bin.length()){
+    //     std::cerr << bin.length() << std::endl;
+    //     throw std::bad_exception();
+    //     return;
+    // }
     deal_vocab();
     deal_token();
     for(int i = 0; i < size; i++){

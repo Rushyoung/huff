@@ -26,14 +26,12 @@ int main(){
 \
 这三家公司若联合，将成为全球第三大汽车集团，年销量超过 800 万辆"
     );
-    BPE a(ex, 4);
+    BPE a(ex, 8);
     a.train(3);
-    for(const auto& i : a.vocab ){
-        std::cout << i.first << ":" << i.second << std::endl;
-    }
-    std::cout << std::endl;
     a.build();
     for(const auto& i : a.vocab ){
         std::cout << i.first << ":" << i.second << std::endl;
     }
+
+
 }
