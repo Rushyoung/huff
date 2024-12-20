@@ -27,7 +27,7 @@ void BPE::deal_vocab(){
 }
 
 void BPE::deal_token(){
-    token = vocab;
+    token = std::unordered_map<std::string, int>(vocab);
 }
 
 void BPE::deal_pairs(){
