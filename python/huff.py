@@ -68,12 +68,16 @@ class BPE:
     def _deal_pairs(self) -> None:
         self.pairs = dict()
         self.pair_pos = collections.defaultdict(list)
+        skip_next = False
         for idx, b in enumerate(self.bin_list):
-            if(idx == 0):
+            if(idx == 0 or skip_next):
+                skip_next = False
                 continue
             pair = (self.bin_list[idx-1], b)
             self.pairs[pair] += 1
             self.pair_pos[pair].append(idx-1)
+            if pair[0] == pair[1]:
+                skip_next = True
 
     def _merge_vocab(self) -> None:
         ori_list = self.bin_list.copy()

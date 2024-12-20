@@ -1,8 +1,8 @@
 #include "quickjs-libc.h"
 #include "jsrt.hpp"
 
-extern const uint32_t qjsc_vacob_size;
-extern const uint8_t qjsc_vacob[];
+extern const uint32_t qjsc_vocab_size;
+extern const uint8_t qjsc_vocab[];
 
 
 static JSContext *JS_NewCustomContext(JSRuntime *rt){
@@ -21,6 +21,11 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt){
     JS_AddIntrinsicTypedArrays(ctx);
     JS_AddIntrinsicPromise(ctx);
     JS_AddIntrinsicBigInt(ctx);
+    {
+        extern JSModuleDef *js_init_module_std(JSContext *ctx, const char *name);
+        js_init_module_std(ctx, "std");
+        js_init_module_os(ctx, "os");
+    }
     return ctx;
 }
 
@@ -36,7 +41,7 @@ void JS_Run(){
     JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
     ctx = JS_NewCustomContext(rt);
     js_std_add_helpers(ctx, argc, argv);
-    js_std_eval_binary(ctx, qjsc_vacob, qjsc_vacob_size, 0);
+    js_std_eval_binary(ctx, qjsc_vocab, qjsc_vocab_size, 0);
     js_std_loop(ctx);
     js_std_free_handlers(rt);
     JS_FreeContext(ctx);

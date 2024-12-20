@@ -21,19 +21,19 @@ include_directories(include)
 include_directories(depend/lib)
 
 
-# compile src/vacob.js to src/vacob.c
+# compile src/vocab.js to src/vocab.c
 # use ./depend/bin/qjsc as quickjs compiler
 add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/src/vacob.c
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/depend/bin/qjsc -c -o ${CMAKE_CURRENT_SOURCE_DIR}/src/vacob.c ${CMAKE_CURRENT_SOURCE_DIR}/src/vacob.js
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/vacob.js
+    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/src/vocab.c
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/depend/bin/qjsc -c -o ${CMAKE_CURRENT_SOURCE_DIR}/src/vocab.c ${CMAKE_CURRENT_SOURCE_DIR}/src/vocab.js
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/vocab.js
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 # add a custom target to ensure the command is run
-add_custom_target(generate_vacob ALL DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/vacob.c)
+add_custom_target(generate_vocab ALL DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/vocab.c)
 # add to the source files
-set(VACOB_GEN ${CMAKE_CURRENT_SOURCE_DIR}/src/vacob.c)
+set(vocab_GEN ${CMAKE_CURRENT_SOURCE_DIR}/src/vocab.c)
 # add danamic library "depend/lib/libquickjs.a"
 add_library(quickjs STATIC IMPORTED)
 set_target_properties(quickjs PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/depend/lib/libquickjs.a)
@@ -42,10 +42,10 @@ set_target_properties(quickjs PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURC
 file(GLOB SOURCES "src/*.cpp")
 
 # add executable with sources and main.cpp file
-add_executable(hfc ${SOURCES} ${VACOB_GEN} main.cpp)
+add_executable(hfc ${SOURCES} ${vocab_GEN} main.cpp)
 
 # link the quickjs library
 target_link_libraries(hfc quickjs)
 
 # ensure the executable depends on the generated file
-add_dependencies(hfc generate_vacob)
+add_dependencies(hfc generate_vocab)
