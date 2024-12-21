@@ -4,9 +4,8 @@ import * as os  from "os";
 
 "use strict";
 
-let batch_size = 4;
 let min_freq   = 2;
-let max_vocab  = 128;
+let max_vocab  = 255;
 
 let max_file_size = 4 * 1024 * 1024; // 4MB
 
@@ -16,8 +15,8 @@ class BPE{
      */
     constructor(input_bin){
         this.bin_list = new Array();
-        for(let i = 0; i < input_bin.length; i+=batch_size){
-            this.bin_list.push(input_bin.slice(i, i+batch_size));
+        for(let i = 0; i < input_bin.length; i++){
+            this.bin_list.push(input_bin[i]);
         }
         this.vocab = null;
         this.pairs = null;
@@ -64,6 +63,13 @@ class BPE{
         }
     }
 };
+
+var hfc_tmp = std.open(".hfc.tmp", "r");
+var input_file_name = hfc_tmp.getline();
+hfc_tmp.close();
+
+console.log(input_file_name);
+
 
 var test = new BPE("0000001200120000");
 
