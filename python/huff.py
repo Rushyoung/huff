@@ -4,9 +4,10 @@ import hffl
 
 dict = lambda: collections.defaultdict(int)
 
-batch = 4
+batch = 8
 min_freq = 2
-max_vocab = 128
+max_vocab = None
+div_chuck = 128
 
 def encoding(string: str) -> str:
     result = []
@@ -30,7 +31,13 @@ class node:
         self.left = None
         self.right = None
         self.code = ''
+        self.weight = freq * len(seq)
 
+
+def create_node(weight):
+    n = node(0, '')
+    n.weight = weight
+    return n
 
 # 用于生成适当长度的二进制片段
 class BPE:
@@ -49,7 +56,7 @@ class BPE:
             if max_vocab is not None:
                 size = max_vocab
             else:
-                size = len(self.bin) // 6
+                size = len(self.bin) // div_chuck
         assert 0 < size,             "size must be greater than 0"
         assert size < len(self.bin), "size must be less than the length of the input binary string"
         self._deal_vocab()
@@ -120,10 +127,10 @@ class BPE:
             self.vocab[seq] += 1
         nodes = [ node(freq, seq) for seq, freq in self.vocab.items() ]
         while len(nodes) > 1:
-            nodes.sort(key=lambda x: x.freq)
+            nodes.sort(key=lambda x: x.weight)
             left = nodes.pop(0)
             right = nodes.pop(0)
-            parent = node(left.freq + right.freq, 'no the leaf')
+            parent = create_node(left.weight + right.weight)
             parent.left = left
             parent.right = right
             nodes.append(parent)
