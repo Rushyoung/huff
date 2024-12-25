@@ -42,7 +42,10 @@ private:
     std::unordered_map<std::pair<std::string, std::string>, std::vector<int>, pair_hash> pair_pos;
     std::unordered_map<std::string, int> token;
     std::set<std::pair<std::string, std::string>> blacklist;
-    std::unordered_map<std::string, std::string> mapping;
+    static std::unordered_map<std::string, std::string> mapping;
+
+    static void saveTree(const std::shared_ptr<Node>& root, std::ofstream& out);
+    static std::shared_ptr<Node> loadTree(std::ifstream& in);
 
 public:
     std::unordered_map<std::string, int> vocab;

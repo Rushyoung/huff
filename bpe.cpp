@@ -1,5 +1,15 @@
 #include "bpe.hpp"
+#include <sstream>
 
+// 定义静态成员
+std::unordered_map<std::string, std::string> HuffmanCompressor::mapping;
+
+HuffmanCompressor::HuffmanCompressor(const std::string& input, int batch) : bin(input) {
+    // 初始化 bin_list
+    for (size_t i = 0; i < bin.size(); i += batch) {
+        bin_list.push_back(bin.substr(i, batch));
+    }
+}
 
 std::string encoding(const std::string& str) {
     std::string result;
@@ -17,13 +27,6 @@ std::string decoding(const std::string& str) {
         result += static_cast<char>(bits.to_ulong());
     }
     return result;
-}
-
-HuffmanCompressor::HuffmanCompressor(const std::string& input, int batch) : bin(input) {
-    for (size_t i = 0; i < bin.size(); i += batch) {
-        bin_list.push_back(bin.substr(i, batch));
-    }
-    assert(bin_list.size() * batch == bin.size());
 }
 
 void HuffmanCompressor::deal_vocab() {
@@ -99,7 +102,7 @@ void HuffmanCompressor::train(int min_freq, int size) {
         size = bin.length() / 6;
     }
     if (size <= 0) {
-        throw std::invalid_argument("Size must be greater than 0");
+        return;
     }
     deal_vocab();
     deal_token();
@@ -112,7 +115,7 @@ void HuffmanCompressor::train(int min_freq, int size) {
 std::shared_ptr<Node> HuffmanCompressor::build() {
     vocab.clear();
     for (const auto& seq : bin_list) {
-        vocab[seq]++;
+        vocab[seq] += 1;
     }
     std::vector<std::shared_ptr<Node>> nodes;
     for (const auto& [seq, freq] : vocab) {
@@ -139,16 +142,18 @@ void HuffmanCompressor::huffman_generate(Node& root, std::string code) {
         root.code = code;
         return;
     }
-    if (root.left != nullptr) { huffman_generate(*root.left, code + "0"); }
-    if (root.right != nullptr) { huffman_generate(*root.right, code + "1"); }
+    if (root.left != nullptr) {
+        huffman_generate(*root.left, code + "0");
+    }
+    if (root.right != nullptr) {
+        huffman_generate(*root.right, code + "1");
+    }
 }
 
 std::unordered_map<std::string, std::string> HuffmanCompressor::huffman_mapping(Node& n) {
-    std::unordered_map<std::string, std::string> mapping;
     if (n.left == nullptr && n.right == nullptr) {
         mapping[n.seq] = n.code;
-    }
-    else {
+    } else {
         if (n.left) {
             auto left_mapping = huffman_mapping(*n.left);
             mapping.insert(left_mapping.begin(), left_mapping.end());
@@ -161,124 +166,152 @@ std::unordered_map<std::string, std::string> HuffmanCompressor::huffman_mapping(
     return mapping;
 }
 
+void HuffmanCompressor::saveTree(const std::shared_ptr<Node>& root, std::ofstream& out) {
+    if (!root) {
+        out.put('#');
+        return;
+    }
+    if (root->seq != "not leaf") {
+        out.put('1');
+        out.write(root->seq.c_str(), root->seq.size());
+    } else {
+        out.put('0');
+    }
+    saveTree(root->left, out);
+    saveTree(root->right, out);
+}
+
+std::shared_ptr<Node> HuffmanCompressor::loadTree(std::ifstream& in) {
+    char ch;
+    in.get(ch);
+    if (ch == '#') return nullptr;
+
+    if (ch == '1') {
+        char seq;
+        in.read(&seq, 1);
+        auto node = std::make_shared<Node>(0, std::string(1, seq));
+        node->left = loadTree(in);
+        node->right = loadTree(in);
+        return node;
+    } else {
+        auto node = std::make_shared<Node>(0, "not leaf");
+        node->left = loadTree(in);
+        node->right = loadTree(in);
+        return node;
+    }
+}
+
 void HuffmanCompressor::compress_file(const std::string& input_file, const std::string& output_file, int batch, int min_freq) {
     // 读取输入文件内容
-    std::ifstream infile(input_file);
-    if (!infile) {
-        throw std::runtime_error("Failed to open input file");
+    std::ifstream in(input_file, std::ios::binary);
+    if (!in.is_open()) {
+        std::cerr << "Error opening input file" << std::endl;
+        return;
     }
+
     std::stringstream buffer;
-    buffer << infile.rdbuf();
+    buffer << in.rdbuf();
     std::string input_str = buffer.str();
-    infile.close();
+    in.close();
 
     // 编码
     std::string bin_str = encoding(input_str);
 
     // 训练
-    HuffmanCompressor compressor(bin_str, batch);
-    compressor.train(min_freq);
-    std::shared_ptr<Node> root = compressor.build();
+    HuffmanCompressor bpe(bin_str, batch);
+    bpe.train(min_freq);
+    std::shared_ptr<Node> root = bpe.build();
 
     // 生成哈夫曼编码
-    HuffmanCompressor::huffman_generate(*root);
-    std::unordered_map<std::string, std::string> mapping = HuffmanCompressor::huffman_mapping(*root);
+    huffman_generate(*root);
+    std::unordered_map<std::string, std::string> mapping = huffman_mapping(*root);
 
     // 压缩
-    std::string compressed_bits;
-    for (const auto& b : compressor.bin_list) {
-        compressed_bits += mapping[b];
+    std::string result;
+    for (const auto& b : bpe.bin_list) {
+        result += mapping[b];
     }
 
-    // 将哈夫曼编码映射和压缩后的数据写入文件
-    std::ofstream outfile(output_file, std::ios::binary);
-    if (!outfile) {
-        throw std::runtime_error("Failed to open output file");
+    // 写入压缩文件
+    std::ofstream out(output_file, std::ios::binary);
+    if (!out.is_open()) {
+        std::cerr << "Error opening output file" << std::endl;
+        return;
     }
+    saveTree(root, out);
+    out.put('#'); // Tree and data separator
+    out.close();
+    return;
 
-    // 写入映射大小
-    size_t map_size = mapping.size();
-    outfile.write(reinterpret_cast<const char*>(&map_size), sizeof(map_size));
-
-    // 写入映射
-    for (const auto& pair : mapping) {
-        size_t key_size = pair.first.size();
-        size_t value_size = pair.second.size();
-        outfile.write(reinterpret_cast<const char*>(&key_size), sizeof(key_size));
-        outfile.write(pair.first.data(), key_size);
-        outfile.write(reinterpret_cast<const char*>(&value_size), sizeof(value_size));
-        outfile.write(pair.second.data(), value_size);
+    // 将编码后的数据以二进制形式写入文件
+    std::vector<unsigned char> binary_data;
+    std::bitset<8> bits;
+    int bitIndex = 0;
+    for (char bit : result) {
+        bits[bitIndex++] = bit - '0';
+        if (bitIndex == 8) {
+            binary_data.push_back(static_cast<unsigned char>(bits.to_ulong()));
+            bits.reset();
+            bitIndex = 0;
+        }
     }
-
-    // 写入压缩数据
-    size_t compressed_size = compressed_bits.size();
-    outfile.write(reinterpret_cast<const char*>(&compressed_size), sizeof(compressed_size));
-    for (size_t i = 0; i < compressed_bits.size(); i += 8) {
-        std::bitset<8> bits(compressed_bits.substr(i, 8));
-        unsigned char byte = static_cast<unsigned char>(bits.to_ulong());
-        outfile.write(reinterpret_cast<const char*>(&byte), sizeof(byte));
+    if (bitIndex > 0) {
+        binary_data.push_back(static_cast<unsigned char>(bits.to_ulong()));
     }
-
-    outfile.close();
+    out.write(reinterpret_cast<const char*>(binary_data.data()), binary_data.size());
+    out.close();
 }
 
 void HuffmanCompressor::decompress_file(const std::string& input_file, const std::string& output_file) {
     // 读取压缩文件内容
-    std::ifstream infile(input_file, std::ios::binary);
-    if (!infile) {
-        throw std::runtime_error("Failed to open input file");
+    std::ifstream in(input_file, std::ios::binary);
+    if (!in.is_open()) {
+        std::cerr << "Error opening input file" << std::endl;
+        return;
     }
 
-    // 读取映射大小
-    size_t map_size;
-    infile.read(reinterpret_cast<char*>(&map_size), sizeof(map_size));
-
-    // 读取映射
-    std::unordered_map<std::string, std::string> mapping;
-    for (size_t i = 0; i < map_size; ++i) {
-        size_t key_size, value_size;
-        infile.read(reinterpret_cast<char*>(&key_size), sizeof(key_size));
-        std::string key(key_size, ' ');
-        infile.read(&key[0], key_size);
-        infile.read(reinterpret_cast<char*>(&value_size), sizeof(value_size));
-        std::string value(value_size, ' ');
-        infile.read(&value[0], value_size);
-        mapping[key] = value;
-    }
-
-    // 读取压缩数据大小
-    size_t compressed_size;
-    infile.read(reinterpret_cast<char*>(&compressed_size), sizeof(compressed_size));
+    // 读取哈夫曼树
+    std::shared_ptr<Node> root = loadTree(in);
+    huffman_generate(*root);
+    std::unordered_map<std::string, std::string> mapping = huffman_mapping(*root);
 
     // 读取压缩数据
-    std::string compressed_bits;
-    for (size_t i = 0; i < compressed_size; ++i) {
-        unsigned char byte;
-        infile.read(reinterpret_cast<char*>(&byte), sizeof(byte));
-        std::bitset<8> bits(byte);
-        compressed_bits += bits.to_string();
-    }
+    std::vector<unsigned char> binary_data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
 
-    infile.close();
+    // 将二进制数据转换回编码字符串
+    std::string encoded_str;
+    for (unsigned char c : binary_data) {
+        std::bitset<8> bits(c);
+        encoded_str += bits.to_string();
+    }
 
     // 解码
     std::string decoded_bin_str;
-    for (size_t i = 0; i < compressed_bits.size(); ) {
+    size_t i = 0;
+    while (i < encoded_str.size()) {
+        bool matched = false;
         for (const auto& pair : mapping) {
-            if (compressed_bits.substr(i, pair.second.size()) == pair.second) {
+            if (encoded_str.substr(i, pair.second.size()) == pair.second) {
                 decoded_bin_str += pair.first;
                 i += pair.second.size();
+                matched = true;
                 break;
             }
+        }
+        if (!matched) {
+            std::cerr << "Decoding error: no matching code found" << std::endl;
+            return;
         }
     }
     std::string decoded_str = decoding(decoded_bin_str);
 
     // 写入解压缩文件
-    std::ofstream outfile(output_file);
-    if (!outfile) {
-        throw std::runtime_error("Failed to open output file");
+    std::ofstream out(output_file);
+    if (!out.is_open()) {
+        std::cerr << "Error opening output file" << std::endl;
+        return;
     }
-    outfile << decoded_str;
-    outfile.close();
+    out << decoded_str;
+    out.close();
 }
