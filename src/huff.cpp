@@ -11,24 +11,12 @@ int huff::compress(std::string file, std::string output, bool debug) {
         std::cerr << "Error opening file: " << file << std::endl;
         return 1;
     }
-
-    // write filename to .hfc.tmp, use text mode
-    std::ofstream tmp(".hfc.tmp", std::ios::binary);
-    if(not tmp.is_open()) {
-        std::cerr << "Error opening file: .hfc.tmp" << std::endl;
-        return 1;
-    }
-    tmp << file;
-    tmp.close();
-
-    // Run JSRT to generate the dictionary
-    JS_Run();
-
-    std::ofstream out(output, std::ios::binary);
-    if(not out.is_open()) {
-        std::cerr << "Error opening file: " << output << std::endl;
-        return 1;
-    }
+    in.seekg(0, std::ios::end);
+    int size = in.tellg();
+    in.seekg(0, std::ios::beg);
+    char* buffer = new char[size + 1];
+    in.read(buffer, size);
+    buffer[size] = '\0';
 
     // compress file
     return 0;

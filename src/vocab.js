@@ -68,11 +68,15 @@ var hfc_tmp = std.open(".hfc.tmp", "r");
 var input_file_name = hfc_tmp.getline();
 hfc_tmp.close();
 
-console.log(input_file_name);
+var file = std.open(input_file_name, "rb");
+// 以二进制方式读取文件，读入到input_bin中依然以二进制方式存储
+var input_bin = file.readAsString(max_file_size);
+file.close();
+// 转为类似 0xaa 0xbb 0xcc 0xdd 的形式
+var bin = console.bin2hex(input_bin);
 
+var token = new BPE(bin);
 
-var test = new BPE("0000001200120000");
-
-test.deal_vocab();
-test.deal_token();
-console.log(test.vocab);
+token.deal_vocab();
+token.deal_token();
+console.log(token.vocab);

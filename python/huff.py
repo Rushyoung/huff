@@ -5,7 +5,7 @@ import hffl
 dict = lambda: collections.defaultdict(int)
 
 batch = 8
-min_freq = 2
+min_freq = 27
 max_vocab = None
 div_chuck = 128
 
