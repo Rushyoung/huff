@@ -1,4 +1,6 @@
 #include "bpe.hpp"
+
+#include <iomanip>
 #include <sstream>
 
 // 定义静态成员
@@ -9,6 +11,21 @@ HuffmanCompressor::HuffmanCompressor(const std::string& input, int batch) : bin(
     for (size_t i = 0; i < bin.size(); i += batch) {
         bin_list.push_back(bin.substr(i, batch));
     }
+}
+void HuffmanCompressor::printTree(const std::shared_ptr<Node>& root, int depth) {
+    if (!root) {
+        return;
+    }
+
+    // 打印当前节点的信息
+    std::cout << std::setw(depth * 4) << "" // 缩进
+              << "Freq: " << root->freq
+              << ", Seq: " << root->seq
+              << ", Code: " << root->code << std::endl;
+
+    // 递归打印左子树和右子树
+    printTree(root->left, depth + 1);
+    printTree(root->right, depth + 1);
 }
 
 std::string encoding(const std::string& str) {
@@ -123,13 +140,13 @@ std::shared_ptr<Node> HuffmanCompressor::build() {
     }
     while (nodes.size() > 1) {
         std::sort(nodes.begin(), nodes.end(), [](const std::shared_ptr<Node>& a, const std::shared_ptr<Node>& b) {
-            return a->freq < b->freq;
-        });
+            return a->freq * a->seq.length() < b->freq * a->seq.length();
+        });//exp
         auto left = nodes.front();
         nodes.erase(nodes.begin());
         auto right = nodes.front();
         nodes.erase(nodes.begin());
-        auto parent = std::make_shared<Node>(left->freq + right->freq, "not leaf");
+        auto parent = std::make_shared<Node>(left->freq + right->freq, "");
         parent->left = left;
         parent->right = right;
         nodes.push_back(parent);
@@ -171,7 +188,7 @@ void HuffmanCompressor::saveTree(const std::shared_ptr<Node>& root, std::ofstrea
         out.put('#');
         return;
     }
-    if (root->seq != "not leaf") {
+    if (root->seq != "") {
         out.put('1');
         out.write(root->seq.c_str(), root->seq.size());
     } else {
@@ -194,7 +211,7 @@ std::shared_ptr<Node> HuffmanCompressor::loadTree(std::ifstream& in) {
         node->right = loadTree(in);
         return node;
     } else {
-        auto node = std::make_shared<Node>(0, "not leaf");
+        auto node = std::make_shared<Node>(0, "");
         node->left = loadTree(in);
         node->right = loadTree(in);
         return node;
@@ -226,6 +243,8 @@ void HuffmanCompressor::compress_file(const std::string& input_file, const std::
     huffman_generate(*root);
     std::unordered_map<std::string, std::string> mapping = huffman_mapping(*root);
 
+    printTree(root);
+
     // 压缩
     std::string result;
     for (const auto& b : bpe.bin_list) {
@@ -241,7 +260,6 @@ void HuffmanCompressor::compress_file(const std::string& input_file, const std::
     saveTree(root, out);
     out.put('#'); // Tree and data separator
     out.close();
-    return;
 
     // 将编码后的数据以二进制形式写入文件
     std::vector<unsigned char> binary_data;

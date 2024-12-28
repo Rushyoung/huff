@@ -26,8 +26,8 @@ int main() {
         std::cout << "File compressed successfully." << std::endl;
 
         // 解压缩文件
-        HuffmanCompressor::decompress_file(compressed_file, decompressed_file);
-        std::cout << "File decompressed successfully." << std::endl;
+        // HuffmanCompressor::decompress_file(compressed_file, decompressed_file);
+        // std::cout << "File decompressed successfully." << std::endl;
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
     }
