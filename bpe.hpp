@@ -27,7 +27,7 @@ public:
     int freq;
     std::string seq;
     std::string code;
-    Node(int freq, const std::string& seq) : freq(freq), seq(seq), left(nullptr), right(nullptr), code("") {}
+    Node(int freq, const std::string& seq) : left(nullptr), right(nullptr), freq(freq), seq(seq), code("") {}
 };
 
 class HuffmanCompressor {

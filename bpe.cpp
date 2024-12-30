@@ -2,6 +2,62 @@
 
 #include <iomanip>
 #include <sstream>
+//只给十六进制补位
+std::string bormat(const std::string& value, int bitnum) {
+    std::stringstream ss;
+    ss << std::hex << std::setw(bitnum / 4) << std::setfill('0') << value;
+    return ss.str();
+}
+
+std::string bormat(int value, int bitnum) {
+    std::stringstream ss;
+    ss << std::hex << std::setw(bitnum / 4) << std::setfill('0') << value;
+    return ss.str();
+}
+//head length = 3
+
+
+inline int calc_bit(int num){
+    int bitWidth = 0;
+    while (num > 0) {
+        num >>= 1;
+        ++bitWidth;
+    }
+    return bitWidth;
+}
+// 文件结构
+// +----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
+// | 文件签名 (3字节) | 词典数量 (32位) | 最大频率 (32位) | 最大键值位 (32bit int)| 词汇频率 (占value_bit位 int) | seql_bit(占最大键值位) | 词汇键值 (seql_bit位) | 内容长度 (32位) | 内容 (数据) 
+// +----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
+void buffer_generate_with_header(std::vector<unsigned char>& buffer, const std::string& head, std::unordered_map<std::string, int>& vocab, const std::string& content){
+    buffer.clear();
+    for(char c : head){
+        buffer.push_back(c);
+    }
+    std::string bormat_result = bormat(vocab.size(), 32);
+    int max_value = std::max_element(vocab.begin(), vocab.end(),
+        [](const std::pair<std::string, int>& a, const std::pair<std::string, int>& b) {
+            return a.second < b.second;
+        })->second;
+    int max_seq_len = std::max_element(vocab.begin(), vocab.end(),
+        [](const std::pair<std::string, int>& a, const std::pair<std::string, int>& b) {
+            return a.first.length() < b.first.length();
+        })->first.length();
+    int value_bit = calc_bit(max_value);
+    int seq_bit = calc_bit(max_seq_len);
+    bormat_result += bormat(value_bit, 32);
+    bormat_result += bormat(seq_bit, 32);
+    for(auto _vocab : vocab){
+        bormat_result += bormat(_vocab.second, value_bit);
+        bormat_result += bormat(_vocab.first.length(), seq_bit);
+        bormat_result += _vocab.first;
+    }
+    bormat_result += bormat(content.length(), 32);
+    bormat_result += content;
+    buffer.insert(buffer.end(), bormat_result.begin(), bormat_result.end());
+}
+
+
 
 // 定义静态成员
 std::unordered_map<std::string, std::string> HuffmanCompressor::mapping;
