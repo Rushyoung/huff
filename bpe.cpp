@@ -2,6 +2,28 @@
 
 #include <iomanip>
 #include <sstream>
+
+std::string encoding(const std::string& str) {
+    std::string result;
+    for (unsigned char c : str) {
+        std::stringstream ss;
+        ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(c);
+        result += ss.str();
+    }
+    return result;
+}
+
+std::string decoding(const std::string& str) {
+    std::string result;
+    for (size_t i = 0; i < str.size(); i += 2) {
+        std::string byteString = str.substr(i, 2);
+        char byte = static_cast<char>(std::stoi(byteString, nullptr, 16));
+        result += byte;
+    }
+    return result;
+}
+
+
 //只给十六进制补位
 std::string bormat(const std::string& value, int bitnum) {
     std::stringstream ss;
@@ -14,7 +36,7 @@ std::string bormat(int value, int bitnum) {
     ss << std::hex << std::setw(bitnum / 4) << std::setfill('0') << value;
     return ss.str();
 }
-//head length = 3
+
 
 
 inline int calc_bit(int num){
@@ -25,36 +47,103 @@ inline int calc_bit(int num){
     }
     return bitWidth;
 }
-// 文件结构
+
+inline int alignment_up(int num){
+    if(num % 8 == 0){return num;}
+    else{return (num / 8 + 1) * 8;}
+}
+
+inline int alignment_down(int num){
+    if(num % 8 == 0){return num;}
+    else{return (num / 8 - 1) * 8;}
+}
+
+// 文件结构(弃用)
 // +----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
-// | 文件签名 (3字节) | 词典数量 (32位) | 最大频率 (32位) | 最大键值位 (32bit int)| 词汇频率 (占value_bit位 int) | seql_bit(占最大键值位) | 词汇键值 (seql_bit位) | 内容长度 (32位) | 内容 (数据) 
+// | 文件签名 (3字节) | 词典数量 (32位) | 最大频率占的bit (32位) | 最长键值bit数 (32bit int)| 词汇频率 (占value_bit位 int) | seql_bit(占最大键值位) | 词汇键值 (seql_bit位) | 内容长度 (32位) | 内容 (数据) 
 // +----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
+
+// 一个hex = 4bit   1 unsigned char = 8bit 
+// +----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
+// | 文件签名 (3字节) | 词典数量 (32bit) |  seql_bit (占16bit) | 词汇键值 向上对齐到 8n bit (有效内容seql_bit位) | 词汇频率 (占 16bit int) | 内容长度 (32位) | 内容 (数据) 
+// +----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
+// content : hex
 void buffer_generate_with_header(std::vector<unsigned char>& buffer, const std::string& head, std::unordered_map<std::string, int>& vocab, const std::string& content){
     buffer.clear();
     for(char c : head){
         buffer.push_back(c);
     }
     std::string bormat_result = bormat(vocab.size(), 32);
-    int max_value = std::max_element(vocab.begin(), vocab.end(),
-        [](const std::pair<std::string, int>& a, const std::pair<std::string, int>& b) {
-            return a.second < b.second;
-        })->second;
-    int max_seq_len = std::max_element(vocab.begin(), vocab.end(),
-        [](const std::pair<std::string, int>& a, const std::pair<std::string, int>& b) {
-            return a.first.length() < b.first.length();
-        })->first.length();
-    int value_bit = calc_bit(max_value);
-    int seq_bit = calc_bit(max_seq_len);
-    bormat_result += bormat(value_bit, 32);
-    bormat_result += bormat(seq_bit, 32);
+    // int max_value = std::max_element(vocab.begin(), vocab.end(),
+    //     [](const std::pair<std::string, int>& a, const std::pair<std::string, int>& b) {
+    //         return a.second < b.second;
+    //     })->second;
+    // int max_seq_len = std::max_element(vocab.begin(), vocab.end(),
+    //     [](const std::pair<std::string, int>& a, const std::pair<std::string, int>& b) {
+    //         return a.first.length() < b.first.length();
+    //     })->first.length();
+    // int value_bit = calc_bit(max_value);
+    // int seql_bit = calc_bit(max_seq_len);
+    // bormat_result += bormat(value_bit, 32);
+    // bormat_result += bormat(seql_bit, 32);
     for(auto _vocab : vocab){
-        bormat_result += bormat(_vocab.second, value_bit);
-        bormat_result += bormat(_vocab.first.length(), seq_bit);
-        bormat_result += _vocab.first;
+        int seql_bit = _vocab.first.length();
+        bormat_result += bormat(seql_bit, 16);
+        bormat_result += bormat(_vocab.first, alignment_up(seql_bit));
+        bormat_result += bormat(_vocab.second, 16);
     }
     bormat_result += bormat(content.length(), 32);
     bormat_result += content;
-    buffer.insert(buffer.end(), bormat_result.begin(), bormat_result.end());
+    if (bormat_result.size() % 2 != 0) {
+        bormat_result += '0';
+    }
+    for (size_t i = 0; i < bormat_result.size(); i += 2) {
+        std::string byteString = bormat_result.substr(i, 2);
+        unsigned char byte = static_cast<unsigned char>(std::stoi(byteString, nullptr, 16));
+        buffer.push_back(byte);
+    }
+}
+
+std::string read_chars(const std::vector<unsigned char>& buffer, size_t& offset, int charnum) {
+    std::string result;
+    for (int i = 0; i < charnum; ++i) {
+        result += buffer[offset++];
+    }
+    return result;
+}
+
+int read_ints(const std::vector<unsigned char>& buffer, size_t& offset, int charnum) {
+    int result = 0;
+    for (int i = 0; i < charnum; ++i) {
+        result = (result << 8) | buffer[offset + i];
+    }
+    offset += charnum;
+    return result;
+}
+
+void HuffmanCompressor::parse_file(const std::string& filename){
+    vocab.clear();
+    size_t offset = 0;
+    std::ifstream file(filename, std::ios::binary);
+    std::vector<unsigned char> buffer((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    std::string signature = read_chars(buffer, offset, 3);
+    if(signature != "HFC"){
+        throw std::runtime_error("Unknown file");
+    }
+    int vocab_len = read_ints(buffer, offset, 4);
+    for(int i = 0; i < vocab_len; i++){
+        int seql_bit = read_ints(buffer, offset, 2);
+        std::string seq = read_chars(buffer, offset, alignment_up(seql_bit)/8);
+        int freq = read_ints(buffer, offset, 2);
+        vocab[seq] = freq;
+    }
+    int content_len = read_ints(buffer, offset, 4);
+    std::string content = read_chars(buffer, offset, content_len);
+
+    if(content_len %2 != 0){
+        
+    }
+
 }
 
 
@@ -84,23 +173,7 @@ void HuffmanCompressor::printTree(const std::shared_ptr<Node>& root, int depth) 
     printTree(root->right, depth + 1);
 }
 
-std::string encoding(const std::string& str) {
-    std::string result;
-    for (unsigned char c : str) {
-        std::bitset<8> bits(c);
-        result += bits.to_string();
-    }
-    return result;
-}
 
-std::string decoding(const std::string& str) {
-    std::string result;
-    for (size_t i = 0; i < str.size(); i += 8) {
-        std::bitset<8> bits(str.substr(i, 8));
-        result += static_cast<char>(bits.to_ulong());
-    }
-    return result;
-}
 
 void HuffmanCompressor::deal_vocab() {
     for (const auto& seq : bin_list) {

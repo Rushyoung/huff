@@ -48,6 +48,7 @@ private:
     static std::shared_ptr<Node> loadTree(std::ifstream& in);
 
 public:
+    void parse_file(const std::string& filename);
     static void printTree(const std::shared_ptr<Node>& root, int depth = 0);
     std::unordered_map<std::string, int> vocab;
     HuffmanCompressor(const std::string& input, int batch);
