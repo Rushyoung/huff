@@ -1,5 +1,4 @@
 #include "bpe.hpp"
-
 #include <iomanip>
 #include <sstream>
 
@@ -68,12 +67,15 @@ inline int alignment_down(int num){
 // | 文件签名 (3字节) | 词典数量 (32bit) |  seql_bit (占16bit) | 词汇键值 向上对齐到 8n bit (有效内容seql_bit位) | 词汇频率 (占 16bit int) | 内容长度 (32位) | 内容 (数据) 
 // +----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
 // content : hex
-void buffer_generate_with_header(std::vector<unsigned char>& buffer, const std::string& head, std::unordered_map<std::string, int>& vocab, const std::string& content){
-    buffer.clear();
-    for(char c : head){
-        buffer.push_back(c);
+void HuffmanCompressor::file_generate_with_header(const std::string& outpath, const std::string& head, std::unordered_map<std::string, int>& vocab){
+    std::ofstream out(outpath, std::ios::binary);
+    if (!out) {
+        throw std::runtime_error("Failed to open output file");
     }
-    std::string bormat_result = bormat(vocab.size(), 32);
+    out.write(head.c_str(), 3);
+    uint32_t vocab_size = vocab.size();
+    out.write(reinterpret_cast<const char*>(&vocab_size), sizeof(vocab_size));
+    // std::string bormat_result = bormat(vocab.size(), 32);
     // int max_value = std::max_element(vocab.begin(), vocab.end(),
     //     [](const std::pair<std::string, int>& a, const std::pair<std::string, int>& b) {
     //         return a.second < b.second;
@@ -86,22 +88,39 @@ void buffer_generate_with_header(std::vector<unsigned char>& buffer, const std::
     // int seql_bit = calc_bit(max_seq_len);
     // bormat_result += bormat(value_bit, 32);
     // bormat_result += bormat(seql_bit, 32);
-    for(auto _vocab : vocab){
-        int seql_bit = _vocab.first.length();
-        bormat_result += bormat(seql_bit, 16);
-        bormat_result += bormat(_vocab.first, alignment_up(seql_bit));
-        bormat_result += bormat(_vocab.second, 16);
+    for(const auto& [seq, freq] : vocab){
+        uint64_t key = 0;
+        uint16_t seql_bit = seq.length();
+        out.write(reinterpret_cast<const char*>(seql_bit), sizeof(seql_bit));
+        for (char c : seq) {
+            key = (key << 4) | (c & 0xF);
+        }
+        int byte_length = (seq.length() * 4 + 7) / 8; // 向上取整
+        for (int i = byte_length - 1; i >= 0; --i) {
+            unsigned char byte = (key >> (i * 8)) & 0xFF;
+            out.write(reinterpret_cast<const char*>(&byte), sizeof(byte));
+        }
+        out.write(reinterpret_cast<const char*>(&freq), sizeof(freq));
+        // bormat_result += bormat(seql_bit, 16);
+        // bormat_result += bormat(_vocab.first, alignment_up(seql_bit));
+        // bormat_result += bormat(_vocab.second, 16);
+        
     }
-    bormat_result += bormat(content.length(), 32);
-    bormat_result += content;
-    if (bormat_result.size() % 2 != 0) {
-        bormat_result += '0';
+    uint32_t content_size = content.length();
+    out.write(reinterpret_cast<const char*>(&content_size), sizeof(content_size));
+    // bormat_result += bormat(content.length(), 32);
+    // bormat_result += content;
+    std::vector<unsigned char> buffer;
+    if (content.size() % 2 != 0) {
+        content += '0';
     }
-    for (size_t i = 0; i < bormat_result.size(); i += 2) {
-        std::string byteString = bormat_result.substr(i, 2);
+    for (size_t i = 0; i < content.size(); i += 2) {
+        std::string byteString = content.substr(i, 2);
         unsigned char byte = static_cast<unsigned char>(std::stoi(byteString, nullptr, 16));
         buffer.push_back(byte);
     }
+    out.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+    out.close();
 }
 
 std::string read_chars(const std::vector<unsigned char>& buffer, size_t& offset, int charnum) {
@@ -121,30 +140,91 @@ int read_ints(const std::vector<unsigned char>& buffer, size_t& offset, int char
     return result;
 }
 
-void HuffmanCompressor::parse_file(const std::string& filename){
-    vocab.clear();
-    size_t offset = 0;
-    std::ifstream file(filename, std::ios::binary);
-    std::vector<unsigned char> buffer((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    std::string signature = read_chars(buffer, offset, 3);
-    if(signature != "HFC"){
-        throw std::runtime_error("Unknown file");
+// 读取文件内容到缓冲区
+std::vector<unsigned char> readFile(const std::string& filename) {
+    std::ifstream in(filename, std::ios::binary);
+    if (!in.is_open()) {
+        throw std::runtime_error("Error opening input file");
     }
-    int vocab_len = read_ints(buffer, offset, 4);
-    for(int i = 0; i < vocab_len; i++){
-        int seql_bit = read_ints(buffer, offset, 2);
-        std::string seq = read_chars(buffer, offset, alignment_up(seql_bit)/8);
-        int freq = read_ints(buffer, offset, 2);
+    return std::vector<unsigned char>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+}
+
+// 从缓冲区读取指定类型的数据
+template <typename T>
+T readData(const std::vector<unsigned char>& buffer, size_t& offset) {
+    T value;
+    memcpy(&value, buffer.data() + offset, sizeof(T));
+    offset += sizeof(T);
+    return value;
+}
+
+// 解析文件并还原 vocab 和 content
+std::string HuffmanCompressor::parse_file(const std::string& filename) {
+    std::vector<unsigned char> buffer = readFile(filename);
+    size_t offset = 0;
+
+    // 读取文件签名
+    std::string signature(buffer.begin(), buffer.begin() + 3);
+    offset += 3;
+    if (signature != "HFC") {
+        throw std::runtime_error("Invalid file signature");
+    }
+
+    // 读取词典数量
+    uint32_t vocab_size = readData<uint32_t>(buffer, offset);
+
+    // 读取词典内容
+    for (uint32_t i = 0; i < vocab_size; ++i) {
+        uint16_t seql_bit = readData<uint16_t>(buffer, offset);
+        int byte_length = (seql_bit * 4 + 7) / 8; // 向上取整
+        uint64_t key = 0;
+        for (int j = 0; j < byte_length; ++j) {
+            key = (key << 8) | buffer[offset++];
+        }
+        std::string seq;
+        for (int j = seql_bit - 1; j >= 0; --j) {
+            char c = (key >> (j * 4)) & 0xF;
+            seq += c;
+        }
+        int freq = readData<uint16_t>(buffer, offset);
         vocab[seq] = freq;
     }
-    int content_len = read_ints(buffer, offset, 4);
-    std::string content = read_chars(buffer, offset, content_len);
 
-    if(content_len %2 != 0){
-        
+    // 读取内容长度
+    uint32_t content_size = readData<uint32_t>(buffer, offset);
+
+    // 读取内容
+    content.clear();
+    for (uint32_t i = 0; i < content_size; ++i) {
+        unsigned char byte = buffer[offset++];
+        content += byte;
     }
-
 }
+
+// void HuffmanCompressor::parse_file(const std::string& filename){
+//     vocab.clear();
+//     size_t offset = 0;
+//     std::ifstream file(filename, std::ios::binary);
+//     std::vector<unsigned char> buffer((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+//     std::string signature = read_chars(buffer, offset, 3);
+//     if(signature != "HFC"){
+//         throw std::runtime_error("Unknown file");
+//     }
+//     int vocab_len = read_ints(buffer, offset, 4);
+//     for(int i = 0; i < vocab_len; i++){
+//         int seql_bit = read_ints(buffer, offset, 2);
+//         std::string seq = read_chars(buffer, offset, alignment_up(seql_bit)/8);
+//         int freq = read_ints(buffer, offset, 2);
+//         vocab[seq] = freq;
+//     }
+//     int content_len = read_ints(buffer, offset, 4);
+//     std::string content = read_chars(buffer, offset, content_len);
+
+//     if(content_len %2 != 0){
+
+//     }
+
+// }
 
 
 
@@ -245,7 +325,7 @@ void HuffmanCompressor::merge_vocab(int min_freq) {
 
 void HuffmanCompressor::train(int min_freq, int size) {
     if (size == -1) {
-        size = bin.length() / 6;
+        size = bin.length() / 4;//change
     }
     if (size <= 0) {
         return;
@@ -380,33 +460,8 @@ void HuffmanCompressor::compress_file(const std::string& input_file, const std::
         result += mapping[b];
     }
 
-    // 写入压缩文件
-    std::ofstream out(output_file, std::ios::binary);
-    if (!out.is_open()) {
-        std::cerr << "Error opening output file" << std::endl;
-        return;
-    }
-    saveTree(root, out);
-    out.put('#'); // Tree and data separator
-    out.close();
-
-    // 将编码后的数据以二进制形式写入文件
-    std::vector<unsigned char> binary_data;
-    std::bitset<8> bits;
-    int bitIndex = 0;
-    for (char bit : result) {
-        bits[bitIndex++] = bit - '0';
-        if (bitIndex == 8) {
-            binary_data.push_back(static_cast<unsigned char>(bits.to_ulong()));
-            bits.reset();
-            bitIndex = 0;
-        }
-    }
-    if (bitIndex > 0) {
-        binary_data.push_back(static_cast<unsigned char>(bits.to_ulong()));
-    }
-    out.write(reinterpret_cast<const char*>(binary_data.data()), binary_data.size());
-    out.close();
+    // 使用 file_generate_with_header 函数保存文件
+    bpe.file_generate_with_header(output_file, "HFC", bpe.vocab);
 }
 
 void HuffmanCompressor::decompress_file(const std::string& input_file, const std::string& output_file) {

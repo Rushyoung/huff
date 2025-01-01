@@ -43,12 +43,13 @@ private:
     std::unordered_map<std::string, int> token;
     std::set<std::pair<std::string, std::string>> blacklist;
     static std::unordered_map<std::string, std::string> mapping;
-
+    std::string content;
     static void saveTree(const std::shared_ptr<Node>& root, std::ofstream& out);
     static std::shared_ptr<Node> loadTree(std::ifstream& in);
 
 public:
-    void parse_file(const std::string& filename);
+    void file_generate_with_header(const std::string& outpath, const std::string& head, std::unordered_map<std::string, int>& vocab);
+    std::string parse_file(const std::string& filename);
     static void printTree(const std::shared_ptr<Node>& root, int depth = 0);
     std::unordered_map<std::string, int> vocab;
     HuffmanCompressor(const std::string& input, int batch);
