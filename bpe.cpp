@@ -1,7 +1,68 @@
 #include "bpe.hpp"
 #include <iomanip>
 #include <sstream>
-std::unordered_map<std::vector<uint8_t>, std::string> HuffmanCompressor::mapping;
+#include <queue>
+
+std::vector<uint8_t> HuffmanCompressor::hex_string_to_bytes(const std::string& hex) {
+    std::vector<uint8_t> bytes;
+    bytes.reserve(hex.length() / 2);
+    
+    for (size_t i = 0; i < hex.length(); i += 2) {
+        uint8_t high = (hex[i] >= 'A') ? (hex[i] - 'A' + 10) : (hex[i] - '0');
+        uint8_t low = (hex[i+1] >= 'A') ? (hex[i+1] - 'A' + 10) : (hex[i+1] - '0');
+        bytes.push_back((high << 4) | low);
+    }
+    return bytes;
+}
+
+std::vector<uint8_t> HuffmanCompressor::hex_to_bytes(const std::string& hex) {
+    std::vector<uint8_t> bytes;
+    bytes.reserve(hex.length() / 2);
+    
+    for (size_t i = 0; i < hex.length(); i += 2) {
+        uint8_t high = (hex[i] >= 'A') ? (hex[i] - 'A' + 10) : (hex[i] - '0');
+        uint8_t low = (hex[i+1] >= 'A') ? (hex[i+1] - 'A' + 10) : (hex[i+1] - '0');
+        bytes.push_back((high << 4) | low);
+    }
+    return bytes;
+}
+
+std::string HuffmanCompressor::bytes_to_hex_string(const std::vector<uint8_t>& bytes) {
+    static const char hex_chars[] = "0123456789ABCDEF";
+    std::string hex;
+    hex.reserve(bytes.size() * 2);
+    
+    for (uint8_t byte : bytes) {
+        hex.push_back(hex_chars[byte >> 4]);
+        hex.push_back(hex_chars[byte & 0x0F]);
+    }
+    return hex;
+}
+
+std::string HuffmanCompressor::hex_to_bits_aligned(const std::string& hex, uint8_t valid_bits) {
+    std::string bits;
+    bits.reserve(hex.length() * 4);
+    
+    // 处理完整字节
+    for (size_t i = 0; i < hex.length() - 2; i += 2) {
+        uint8_t byte = (hex[i] >= 'A' ? hex[i] - 'A' + 10 : hex[i] - '0') << 4 |
+                      (hex[i+1] >= 'A' ? hex[i+1] - 'A' + 10 : hex[i+1] - '0');
+        std::bitset<8> bitset(byte);
+        bits += bitset.to_string();
+    }
+    
+    // 处理最后一个字节
+    if (!hex.empty()) {
+        uint8_t last_byte = (hex[hex.length()-2] >= 'A' ? hex[hex.length()-2] - 'A' + 10 : hex[hex.length()-2] - '0') << 4 |
+                           (hex[hex.length()-1] >= 'A' ? hex[hex.length()-1] - 'A' + 10 : hex[hex.length()-1] - '0');
+        std::bitset<8> last_bits(last_byte);
+        bits += last_bits.to_string().substr(0, valid_bits);
+    }
+    
+    return bits;
+}
+
+std::unordered_map<std::string, std::string> HuffmanCompressor::mapping;
 // std::string encoding(const std::string& str) {
 //     std::string result;
 //     for (unsigned char c : str) {
@@ -12,25 +73,51 @@ std::unordered_map<std::vector<uint8_t>, std::string> HuffmanCompressor::mapping
 //     return result;
 // }
 
-std::vector<uint8_t> encoding(const std::string& str) {
-    std::vector<uint8_t> result;
+std::string encoding(const std::string& str) {
+    static const char hex_chars[] = "0123456789ABCDEF";
+    std::string result;
     result.reserve(str.length() * 2);
     for (unsigned char c : str) {
-        result.push_back((c >> 4) & 0xF);  // 高4位
-        result.push_back(c & 0xF);         // 低4位
+        result.push_back(hex_chars[c >> 4]);
+        result.push_back(hex_chars[c & 0x0F]);
     }
     return result;
 }
 
 std::string decoding(const std::string& str) {
+    if (str.empty() || str.length() % 2 != 0) {
+        throw std::runtime_error("Invalid hex string length");
+    }
+    
     std::string result;
-    for (size_t i = 0; i < str.size(); i += 2) {
-        std::string byteString = str.substr(i, 2);
-        char byte = static_cast<char>(std::stoi(byteString, nullptr, 16));
-        result += byte;
+    result.reserve(str.length() / 2);
+    
+    for (size_t i = 0; i < str.length(); i += 2) {
+        uint8_t high = (str[i] >= 'A') ? (str[i] - 'A' + 10) : (str[i] - '0');
+        uint8_t low = (str[i+1] >= 'A') ? (str[i+1] - 'A' + 10) : (str[i+1] - '0');
+        result.push_back((high << 4) | low);
     }
     return result;
 }
+
+
+std::string HuffmanCompressor::bits_to_hex(const std::string& bits) {
+    std::string hex;
+    hex.reserve((bits.length() + 7) / 8 * 2);
+    
+    for (size_t i = 0; i < bits.length(); i += 8) {
+        std::string byte_str = bits.substr(i, std::min(size_t(8), bits.length() - i));
+        while (byte_str.length() < 8) {
+            byte_str += '0';  // 右补0
+        }
+        uint8_t byte = std::bitset<8>(byte_str).to_ulong();
+        char hex_byte[3];
+        snprintf(hex_byte, sizeof(hex_byte), "%02X", byte);
+        hex += hex_byte;
+    }
+    return hex;
+}
+
 
 
 //只给十六进制补位
@@ -135,46 +222,35 @@ inline int alignment_down(int num){
 
 void HuffmanCompressor::file_generate_with_header(const std::string& outpath, const std::string& head) {
     std::ofstream out(outpath, std::ios::binary);
-    if (!out) {
-        throw std::runtime_error("Failed to open output file");
-    }
+    if (!out) throw std::runtime_error("Failed to open output file");
 
-    // 1. 写入文件头 (3字节)
+    // 1. 写入文件头和词典大小
     out.write(head.c_str(), 3);
-
-    // 2. 写入词典数量 (32bit)
     uint32_t vocab_size = vocab.size();
     out.write(reinterpret_cast<const char*>(&vocab_size), sizeof(vocab_size));
 
-    // 3. 写入词典项
+    // 2. 写入词典项
     for(const auto& [seq, freq] : vocab) {
-        // 写入序列长度 (16bit) - 实际长度，不是bit长度
-        uint16_t seq_size = seq.size();
+        uint16_t seq_size = seq.length() / 2;  // 实际字节数
         out.write(reinterpret_cast<const char*>(&seq_size), sizeof(seq_size));
         
-        // 写入序列内容
-        out.write(reinterpret_cast<const char*>(seq.data()), seq_size);
+        // 直接转换并写入二进制
+        auto bytes = hex_to_bytes(seq);
+        out.write(reinterpret_cast<const char*>(bytes.data()), seq_size);
         
-        // 写入频率 (16bit)
         uint16_t freq_val = static_cast<uint16_t>(freq);
         out.write(reinterpret_cast<const char*>(&freq_val), sizeof(freq_val));
     }
 
-    // 4. 写入压缩内容
-    // 写入内容大小 (32bit)
-    uint32_t content_size = content.size();
+    // 3. 写入压缩内容
+    auto content_bytes = hex_to_bytes(compressed_hex);
+    uint32_t content_size = content_bytes.size();
     out.write(reinterpret_cast<const char*>(&content_size), sizeof(content_size));
-    
-    // 写入有效位数 (8bit)
-    uint8_t valid_bits = (content_size > 0) ? 8 : 0;
     out.write(reinterpret_cast<const char*>(&valid_bits), sizeof(valid_bits));
     
-    // 写入内容
-    if (content_size > 0) {
-        out.write(reinterpret_cast<const char*>(content.data()), content_size);
+    if (!content_bytes.empty()) {
+        out.write(reinterpret_cast<const char*>(content_bytes.data()), content_size);
     }
-    
-    out.close();
 }
 std::string read_chars(const std::vector<unsigned char>& buffer, size_t& offset, int charnum) {
     std::string result;
@@ -289,34 +365,19 @@ T readData(const std::vector<unsigned char>& buffer, size_t& offset) {
 //         bin_list.push_back(bin.substr(i, batch));
 //     }
 // }
-HuffmanCompressor::HuffmanCompressor(const std::string& input, const int batch)
-    : token(std::unordered_map<std::vector<uint8_t>, int>()),
-      vocab(std::unordered_map<std::vector<uint8_t>, int>()) {
+HuffmanCompressor::HuffmanCompressor(const std::string& input, int batch) {
     bin = encoding(input);
-    for (size_t i = 0; i < bin.size(); i += batch * 2) {
-        std::vector<uint8_t> chunk;
-        chunk.reserve(batch * 2);
-        for (size_t j = 0; j < batch * 2 && i + j < bin.size(); ++j) {
-            chunk.push_back(bin[i + j]);
-        }
-        bin_list.push_back(chunk);
+    for (size_t i = 0; i < bin.length(); i += batch) {
+        bin_list.push_back(bin.substr(i, batch));
     }
 }
 void HuffmanCompressor::printTree(const std::shared_ptr<Node>& root, int depth) {
-    if (!root) {
-        return;
-    }
+    if (!root) return;
 
-    std::cout << std::setw(depth * 4) << "" // 缩进
+    std::cout << std::string(depth * 4, ' ') 
               << "Freq: " << root->freq
-              << ", Seq: ";
-    
-    // 打印字节序列
-    for (uint8_t byte : root->seq) {
-        std::cout << std::hex << std::setw(2) << std::setfill('0') 
-                  << static_cast<int>(byte) << " ";
-    }
-    std::cout << ", Code: " << root->code << std::endl;
+              << ", Seq: " << root->seq
+              << ", Code: " << root->code << std::endl;
 
     printTree(root->left, depth + 1);
     printTree(root->right, depth + 1);
@@ -346,8 +407,15 @@ void HuffmanCompressor::deal_token() {
 void HuffmanCompressor::deal_pairs() {
     pairs.clear();
     pair_pos.clear();
+
+    // 预分配空间以减少重新分配
+    size_t estimated_pairs = bin_list.size() - 1;
+    pairs.reserve(estimated_pairs);
+    pair_pos.reserve(estimated_pairs);
+
+    // 使用滑动窗口计算对
     for (size_t i = 1; i < bin_list.size(); ++i) {
-        std::pair<std::vector<uint8_t>, std::vector<uint8_t>> pair = {bin_list[i - 1], bin_list[i]};
+        std::pair<std::string, std::string> pair{bin_list[i - 1], bin_list[i]};
         pairs[pair]++;
         pair_pos[pair].push_back(i - 1);
     }
@@ -402,65 +470,89 @@ void HuffmanCompressor::deal_pairs() {
 // }
 
 void HuffmanCompressor::merge_vocab(int min_freq) {
-    auto ori_list = bin_list;
-    auto best_pair = std::max_element(pairs.begin(), pairs.end(), 
+    if (pairs.empty()) return;
+
+    // 1. 找到最高频率的相邻对
+    auto best_pair = std::max_element(pairs.begin(), pairs.end(),
         [](const auto& a, const auto& b) {
             return a.second < b.second;
         })->first;
 
+    // 2. 检查是否在黑名单中
     while (blacklist.find(best_pair) != blacklist.end()) {
         pairs.erase(best_pair);
+        if (pairs.empty()) return;
         best_pair = std::max_element(pairs.begin(), pairs.end(),
             [](const auto& a, const auto& b) {
                 return a.second < b.second;
             })->first;
     }
 
-    if (pairs[best_pair] <= min_freq) {
-        return;
-    }
+    if (pairs[best_pair] <= min_freq) return;
 
-    std::vector<uint8_t> best_bin;
-    best_bin.reserve(best_pair.first.size() + best_pair.second.size());
-    best_bin.insert(best_bin.end(), best_pair.first.begin(), best_pair.first.end());
-    best_bin.insert(best_bin.end(), best_pair.second.begin(), best_pair.second.end());
-
+    // 3. 执行合并操作
+    std::string best_bin = best_pair.first + best_pair.second;
+    auto old_list = bin_list;  // 保存原始列表以便回滚
     size_t length = bin_list.size();
     size_t offset = 0;
+
+    // 4. 更新bin_list
     for (int pos : pair_pos[best_pair]) {
         size_t idx = pos - offset;
-        if (idx < 0 || idx >= length) {
-            continue;
+        if (idx >= length - 1) continue;
+        
+        if (bin_list[idx] == best_pair.first && 
+            bin_list[idx + 1] == best_pair.second) {
+            bin_list[idx] = best_bin;
+            bin_list.erase(bin_list.begin() + idx + 1);
+            offset++;
         }
-        if (bin_list[idx] != best_pair.first || bin_list[idx + 1] != best_pair.second) {
-            continue;
-        }
-        bin_list[idx] = best_bin;
-        bin_list.erase(bin_list.begin() + idx + 1);
-        offset++;
     }
 
+    // 5. 更新词频
     int freq = pairs[best_pair];
     token[best_bin] = freq;
     token[best_pair.first] -= freq;
     token[best_pair.second] -= freq;
+
+    // 6. 检查合并是否有效
+    auto check_freq = [min_freq](int freq) {
+        return freq > 0 && freq > min_freq;
+    };
+
+    if (!check_freq(token[best_pair.first]) || 
+        !check_freq(token[best_pair.second])) {
+        // 合并无效，回滚
+        bin_list = std::move(old_list);
+        token[best_bin] = 0;
+        token[best_pair.first] += freq;
+        token[best_pair.second] += freq;
+        blacklist.insert(best_pair);
+    }
 }
 
 void HuffmanCompressor::train(int min_freq, int size) {
     if (size == -1) {
-        size = bin.size() / 128;//change
+        size = std::min(256, static_cast<int>(bin.length() / 64));
     }
-    if (size <= 0) {
-        return;
-    }
-    if(size > 256){
-        size = 256;
-    }
+
+    // 1. 初始化词典
     deal_vocab();
     deal_token();
+
+    // 2. BPE训练循环
     for (int i = 0; i < size; i++) {
+        // 计算相邻对
         deal_pairs();
+        if (pairs.empty()) break;
+
+        // 合并最频繁的对
         merge_vocab(min_freq);
+        
+        // 调试输出
+        std::cerr << "Iteration " << i + 1 
+                  << ", vocab size: " << vocab.size() 
+                  << ", pairs: " << pairs.size() << std::endl;
     }
 }
 
@@ -489,34 +581,36 @@ void HuffmanCompressor::train(int min_freq, int size) {
 //     return nodes.front();
 // }
 std::shared_ptr<Node> HuffmanCompressor::build() {
-    // vocab.clear();
-    for (const auto& seq : bin_list) {
-        vocab[seq] += 1;
+    if (vocab.empty()) {
+        return nullptr;
     }
 
-    std::vector<std::shared_ptr<Node>> nodes;
+    // 使用最小堆优化排序
+    auto comp = [](const std::shared_ptr<Node>& a, const std::shared_ptr<Node>& b) {
+        return a->freq * a->seq.length() > b->freq * b->seq.length();
+    };
+    std::priority_queue<std::shared_ptr<Node>, 
+                       std::vector<std::shared_ptr<Node>>, 
+                       decltype(comp)> nodes(comp);
+
+    // 初始化节点
+
     for (const auto& [seq, freq] : vocab) {
-        nodes.push_back(std::make_shared<Node>(freq, seq));
+        nodes.push(std::make_shared<Node>(freq, seq));
     }
 
+    // 构建哈夫曼树
     while (nodes.size() > 1) {
-        std::sort(nodes.begin(), nodes.end(), 
-            [](const std::shared_ptr<Node>& a, const std::shared_ptr<Node>& b) {
-                return a->freq * a->seq.size() < b->freq * b->seq.size();
-            });
-        
-        auto left = nodes.front();
-        nodes.erase(nodes.begin());
-        auto right = nodes.front();
-        nodes.erase(nodes.begin());
+        auto left = nodes.top(); nodes.pop();
+        auto right = nodes.top(); nodes.pop();
 
-        std::vector<uint8_t> parent_seq;
-        auto parent = std::make_shared<Node>(left->freq + right->freq, parent_seq);
+        auto parent = std::make_shared<Node>(left->freq + right->freq, "");
         parent->left = left;
         parent->right = right;
-        nodes.push_back(parent);
+        nodes.push(parent);
     }
-    return nodes.front();
+
+    return nodes.empty() ? nullptr : nodes.top();
 }
 
 // void HuffmanCompressor::huffman_generate(Node& root, std::string code) {
@@ -563,7 +657,7 @@ void HuffmanCompressor::huffman_generate(Node& root, std::string code) {
 //     return mapping;
 // }
 
-std::unordered_map<std::vector<uint8_t>, std::string> HuffmanCompressor::huffman_mapping(Node& n) {
+std::unordered_map<std::string, std::string> HuffmanCompressor::huffman_mapping(Node& n) {
     if (n.left == nullptr && n.right == nullptr) {
         mapping[n.seq] = n.code;
     } else {
@@ -576,7 +670,6 @@ std::unordered_map<std::vector<uint8_t>, std::string> HuffmanCompressor::huffman
     }
     return mapping;
 }
-
 // void HuffmanCompressor::saveTree(const std::shared_ptr<Node>& root, std::ofstream& out) {
 //     if (!root) {
 //         out.put('#');
@@ -651,204 +744,174 @@ std::unordered_map<std::vector<uint8_t>, std::string> HuffmanCompressor::huffman
 
 // 修改压缩函数
 void HuffmanCompressor::compress_file(const std::string& input_file, const std::string& output_file, int batch, int min_freq) {
-    // 读取输入文件
+    std::cerr << "开始压缩文件: " << input_file << std::endl;
+    
+    // 读取并初始化
     std::ifstream in(input_file, std::ios::binary);
-    if (!in.is_open()) {
-        throw std::runtime_error("Error opening input file");
-    }
-
-    std::vector<uint8_t> input_data((std::istreambuf_iterator<char>(in)), 
-                                   std::istreambuf_iterator<char>());
+    if (!in) throw std::runtime_error("Error opening input file");
+    std::string input_str((std::istreambuf_iterator<char>(in)), 
+                         std::istreambuf_iterator<char>());
     in.close();
+    
+    std::cerr << "原始文件大小: " << input_str.length() << " 字节" << std::endl;
 
-    // 转换为十六进制并训练
-    std::string input_str(input_data.begin(), input_data.end());
+    // BPE处理
     HuffmanCompressor bpe(input_str, batch);
+    std::cerr << "初始化BPE, batch大小: " << batch << std::endl;
+    
     bpe.train(min_freq);
-    std::shared_ptr<Node> root = bpe.build();
+    std::cerr << "BPE训练完成, 最小频率: " << min_freq << std::endl;
+    std::cerr << "词典大小: " << bpe.vocab.size() << std::endl;
 
-    // 生成哈夫曼编码
+    auto root = bpe.build();
+    if (!root) throw std::runtime_error("Failed to build Huffman tree");
+    std::cerr << "哈夫曼树构建完成" << std::endl;
+
+    // 生成映射
     huffman_generate(*root);
     auto mapping = huffman_mapping(*root);
+    std::cerr << "编码映射表大小: " << mapping.size() << std::endl;
 
     // 压缩数据
     std::string bit_string;
     for (const auto& b : bpe.bin_list) {
-        if (mapping.find(b) != mapping.end()) {
-            bit_string += mapping[b];
+        if (auto it = mapping.find(b); it != mapping.end()) {
+            bit_string += it->second;
         }
     }
+    std::cerr << "生成位串长度: " << bit_string.length() << " bits" << std::endl;
 
-    // 转换为字节序列
-    std::vector<uint8_t> binary_data;
-    binary_data.reserve((bit_string.length() + 7) / 8);
-    
-    uint8_t current_byte = 0;
-    int bit_count = 0;
-    
-    for(char bit : bit_string) {
-        current_byte = (current_byte << 1) | (bit - '0');
-        bit_count++;
-        
-        if(bit_count == 8) {
-            binary_data.push_back(current_byte);
-            current_byte = 0;
-            bit_count = 0;
-        }
-    }
-    
-    // 处理最后一个不完整字节
-    if(bit_count > 0) {
-        current_byte <<= (8 - bit_count);
-        binary_data.push_back(current_byte);
-    }
+    // 记录有效位数
+    bpe.valid_bits = bit_string.length() % 8;
+    if (bpe.valid_bits == 0) bpe.valid_bits = 8;
+    std::cerr << "最后一个字节有效位数: " << (int)bpe.valid_bits << std::endl;
 
-    // 保存压缩文件
-    bpe.content = binary_data;
+    // 转换为十六进制
+    bpe.compressed_hex = bits_to_hex(bit_string);
+    std::cerr << "压缩后大小: " << bpe.compressed_hex.length() / 2 << " 字节" << std::endl;
+    std::cerr << "压缩率: " << (float)(bpe.compressed_hex.length() / 2) / input_str.length() * 100 << "%" << std::endl;
+    
+    // 写入文件
     bpe.file_generate_with_header(output_file, "HFC");
+    std::cerr << "压缩完成，已保存到: " << output_file << std::endl;
 }
+
 
 void HuffmanCompressor::parse_file(const std::string& filename) {
     std::vector<unsigned char> buffer = readFile(filename);
     size_t offset = 0;
-    size_t buffer_size = buffer.size();
 
-    // 边界检查
-    if (buffer_size < 7) { // 3(signature) + 4(vocab_size)
-        throw std::runtime_error("Invalid file format: file too small");
-    }
+    if (buffer.size() < 8) throw std::runtime_error("Invalid file format");
 
-    // 读取文件签名
+    // 1. 检查文件头
     std::string signature(buffer.begin(), buffer.begin() + 3);
     offset += 3;
-    if (signature != "HFC") {
-        throw std::runtime_error("Invalid file signature");
-    }
+    if (signature != "HFC") throw std::runtime_error("Invalid file signature");
 
-    // 读取词典大小
+    // 2. 读取词典大小
     uint32_t vocab_size = readData<uint32_t>(buffer, offset);
-    std::cerr << "Vocab size: " << vocab_size << std::endl;
-
-    // 读取词典
     vocab.clear();
-    for (uint32_t i = 0; i < vocab_size; ++i) {
-        // 边界检查
-        if (offset + sizeof(uint16_t) > buffer_size) {
-            throw std::runtime_error("Unexpected end of file while reading sequence length");
-        }
 
+    // 3. 读取词典项
+    for (uint32_t i = 0; i < vocab_size; ++i) {
         // 读取序列长度
         uint16_t seq_size = readData<uint16_t>(buffer, offset);
-        std::cerr << "Seq size: " << seq_size << std::endl;
-
-        // 边界检查
-        if (offset + seq_size + sizeof(uint16_t) > buffer_size) {
-            throw std::runtime_error("Unexpected end of file while reading sequence data");
-        }
-
-        // 读取序列内容
-        std::vector<uint8_t> seq;
-        seq.reserve(seq_size);
+        
+        // 转换二进制序列为十六进制字符串
+        std::string seq;
+        seq.reserve(seq_size * 2);  // 预分配空间
         for (uint16_t j = 0; j < seq_size; ++j) {
-            seq.push_back(buffer[offset++]);
+            static const char hex_chars[] = "0123456789ABCDEF";
+            uint8_t byte = buffer[offset++];
+            seq.push_back(hex_chars[byte >> 4]);
+            seq.push_back(hex_chars[byte & 0x0F]);
         }
 
         // 读取频率
         uint16_t freq = readData<uint16_t>(buffer, offset);
-        std::cerr << "Freq: " << freq << std::endl;
-
         vocab[seq] = freq;
     }
 
-    // 读取压缩内容
-    if (offset + sizeof(uint32_t) + sizeof(uint8_t) > buffer_size) {
-        throw std::runtime_error("Unexpected end of file while reading content size");
-    }
-
-    // 读取内容大小和有效位数
+    // 4. 读取压缩内容信息
     uint32_t content_size = readData<uint32_t>(buffer, offset);
-    uint8_t valid_bits = readData<uint8_t>(buffer, offset);
+    valid_bits = readData<uint8_t>(buffer, offset);
 
-    // 边界检查
-    if (offset + content_size > buffer_size) {
-        throw std::runtime_error("Unexpected end of file while reading content");
-    }
-
-    // 读取内容
-    content.clear();
-    if (content_size > 0) {
-        content.assign(buffer.begin() + offset, 
-                      buffer.begin() + offset + content_size);
+    // 5. 读取压缩内容并转换为十六进制字符串
+    compressed_hex.clear();
+    compressed_hex.reserve(content_size * 2);
+    static const char hex_chars[] = "0123456789ABCDEF";
+    
+    for (uint32_t i = 0; i < content_size; ++i) {
+        uint8_t byte = buffer[offset + i];
+        compressed_hex.push_back(hex_chars[byte >> 4]);
+        compressed_hex.push_back(hex_chars[byte & 0x0F]);
     }
 }
 
 // 修改decompress_file函数中的关键部分
 void HuffmanCompressor::decompress_file(const std::string& input_file, const std::string& output_file) {
     try {
-        // 解析压缩文件
+        std::cerr << "开始解压文件: " << input_file << std::endl;
+
         HuffmanCompressor decompressor("", 1);
         decompressor.parse_file(input_file);
+        std::cerr << "文件解析完成" << std::endl;
+        std::cerr << "词典大小: " << decompressor.vocab.size() << std::endl;
 
-        // 还原词典和构建哈夫曼树
-        std::shared_ptr<Node> root = decompressor.build();
-        if (!root) {
-            throw std::runtime_error("Failed to build Huffman tree");
-        }
+        // 构建哈夫曼树
+        auto root = decompressor.build();
+        if (!root) throw std::runtime_error("Failed to build Huffman tree");
+        std::cerr << "哈夫曼树重建完成" << std::endl;
 
+        // 生成编码映射
         huffman_generate(*root);
         auto mapping = huffman_mapping(*root);
+        std::cerr << "编码映射表重建完成，大小: " << mapping.size() << std::endl;
 
-        // 转换压缩数据为位串
-        std::string bit_string;
-        for (uint8_t byte : decompressor.content) {
-            std::bitset<8> bits(byte);
-            bit_string += bits.to_string();
+        // 构建反向映射
+        std::unordered_map<std::string, std::string> reverse_mapping;
+        for (const auto& [seq, code] : mapping) {
+            reverse_mapping[code] = seq;
         }
+
+        // 解码压缩内容
+        std::cerr << "压缩内容大小: " << decompressor.compressed_hex.length() / 2 << " 字节" << std::endl;
+        std::cerr << "最后一个字节有效位数: " << (int)decompressor.valid_bits << std::endl;
+
+        std::string bit_string = hex_to_bits_aligned(decompressor.compressed_hex, 
+                                                   decompressor.valid_bits);
+        std::cerr << "解压后位串长度: " << bit_string.length() << " bits" << std::endl;
 
         // 解码
-        std::vector<uint8_t> decoded_data;
-        std::shared_ptr<Node> current = root;
+        std::string decoded_hex;
+        decoded_hex.reserve(bit_string.length());
+        std::string current_code;
+        current_code.reserve(32);
         
+        size_t decoded_symbols = 0;
         for (char bit : bit_string) {
-            if (!current) {
-                throw std::runtime_error("Invalid Huffman tree state");
-            }
-
-            if (bit == '0') {
-                current = current->left;
-            } else {
-                current = current->right;
-            }
-
-            if (current && current->left == nullptr && current->right == nullptr) {
-                decoded_data.insert(decoded_data.end(), 
-                                  current->seq.begin(), 
-                                  current->seq.end());
-                current = root;
+            current_code += bit;
+            if (auto it = reverse_mapping.find(current_code); it != reverse_mapping.end()) {
+                decoded_hex += it->second;
+                current_code.clear();
+                decoded_symbols++;
             }
         }
+        std::cerr << "解码的符号数量: " << decoded_symbols << std::endl;
 
-        // 转换回原始数据
-        std::vector<uint8_t> original_data;
-        original_data.reserve(decoded_data.size() / 2);
+        // 转换并写入文件
+        std::string original_text = decoding(decoded_hex);
+        std::cerr << "解压后文件大小: " << original_text.length() << " 字节" << std::endl;
 
-        for (size_t i = 0; i < decoded_data.size() - 1; i += 2) {
-            uint8_t byte = (decoded_data[i] << 4) | decoded_data[i + 1];
-            original_data.push_back(byte);
-        }
-
-        // 写入文件
         std::ofstream out(output_file, std::ios::binary);
-        if (!out) {
-            throw std::runtime_error("Failed to open output file");
-        }
-
-        out.write(reinterpret_cast<const char*>(original_data.data()), 
-                 original_data.size());
+        if (!out) throw std::runtime_error("Failed to open output file");
+        out.write(original_text.c_str(), original_text.length());
         out.close();
 
+        std::cerr << "解压完成，已保存到: " << output_file << std::endl;
+
     } catch (const std::exception& e) {
-        std::cerr << "Error in decompress_file: " << e.what() << std::endl;
+        std::cerr << "解压错误: " << e.what() << std::endl;
         throw;
     }
 }

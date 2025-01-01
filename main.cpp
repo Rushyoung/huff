@@ -16,9 +16,10 @@
 
 
 int main() {
-    std::string input_file = "0.jpg";
+    system("chcp 65001");
+    std::string input_file = "1.txt";
     std::string compressed_file = "compressed.bin";
-    std::string decompressed_file = "decompressed.jpg";
+    std::string decompressed_file = "decompressed.txt";
 
     try {
         // 压缩文件
